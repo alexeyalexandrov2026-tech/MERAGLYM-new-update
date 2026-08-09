@@ -37,7 +37,7 @@ const TreeNode = ({
       try {
         const res = await fetch(`/api/nodes?parentId=${node.id}`);
         if (res.ok) {
-          const data = await res.json();
+          const data = (await res.json()) as Node[];
           setChildren(data);
         }
       } catch (err) {
@@ -124,7 +124,7 @@ export default function Sidebar({ initialNodes, onSelectNode, selectedNodeId }: 
       .then((res) => res.json())
       .then((data) => {
         if (isMounted && Array.isArray(data)) {
-          setNodes(data);
+          setNodes(data as Node[]);
         }
       })
       .catch((err) => console.error("Failed to fetch root nodes:", err))

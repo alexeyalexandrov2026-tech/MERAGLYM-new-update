@@ -22,7 +22,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
        ORDER BY name ASC LIMIT 100`
     ).bind(pattern, pattern, pattern, pattern, pattern).all();
 
-    const mapped = (results || []).map((row: any) => ({
+    const mapped = (results || []).map((row: Record<string, unknown>) => ({
       ...row,
       localInstall: Boolean(row.localInstall),
       googleDork: Boolean(row.googleDork),

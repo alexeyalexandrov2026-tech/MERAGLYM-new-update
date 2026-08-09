@@ -20,14 +20,14 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   try {
     let stmt;
     if (parentId === null) {
-      stmt = env.DB.prepare('SELECT * FROM Node WHERE parentId IS NULL ORDER BY name ASC');
+      stmt = env.DB.prepare('SELECT * FROM Node WHERE parentId IS NULL OR parentId = 1 ORDER BY name ASC');
     } else {
       stmt = env.DB.prepare('SELECT * FROM Node WHERE parentId = ? ORDER BY name ASC').bind(parentId);
     }
     const { results } = await stmt.all();
 
     // Map boolean integers 0/1 back to boolean for JSON schema compatibility
-    const mapped = (results || []).map((row: any) => ({
+    const mapped = (results || []).map((row: Record<string, unknown>) => ({
       ...row,
       localInstall: Boolean(row.localInstall),
       googleDork: Boolean(row.googleDork),

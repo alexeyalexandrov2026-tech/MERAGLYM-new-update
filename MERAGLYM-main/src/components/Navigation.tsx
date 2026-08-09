@@ -10,6 +10,7 @@ export default function Navigation({ currentView, onViewChange }: NavigationProp
   const { t } = useI18n();
 
   const navItems = [
+    { id: "agent", label: "AI Agent" },
     { id: "overview", label: t("nav.overview") },
     { id: "osint", label: t("nav.osint") },
     { id: "search", label: t("nav.search") },

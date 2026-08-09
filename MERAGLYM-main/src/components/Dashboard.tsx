@@ -6,6 +6,7 @@ import Sidebar from "./Sidebar";
 import NodeView from "./NodeView";
 import Navigation from "./Navigation";
 import SearchPanel from "./SearchPanel";
+import AgentChatPanel from "./AgentChatPanel";
 import JobsPanel from "./JobsPanel";
 import { useI18n } from "@/lib/i18nContext";
 
@@ -16,13 +17,15 @@ interface DashboardProps {
 
 export default function Dashboard({ initialNodes, initialJobs }: DashboardProps) {
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
-  const [currentView, setCurrentView] = useState("osint");
+  const [currentView, setCurrentView] = useState("agent");
   const { t, locale, setLocale } = useI18n();
 
   return (
     <div style={{ display: "flex", height: "100vh", overflow: "hidden", position: "relative", width: "100vw" }}>
       <div className="scanline" />
       <Navigation currentView={currentView} onViewChange={setCurrentView} />
+
+      {currentView === "agent" && <AgentChatPanel />}
 
       {currentView === "osint" && (
         <>
