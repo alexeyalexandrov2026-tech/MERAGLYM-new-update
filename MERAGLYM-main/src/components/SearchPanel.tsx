@@ -17,7 +17,7 @@ export default function SearchPanel() {
     try {
       const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
       if (res.ok) {
-        const data = await res.json();
+        const data = (await res.json()) as Node[];
         setResults(data);
       }
     } catch (err) {
