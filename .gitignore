@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+
+# Next.js / Open-Next build artifacts
+.next/
+.open-next/
+out/
+build/
+next-env.d.ts
+*.tsbuildinfo
+
+# Cloudflare Wrangler
+.wrangler/
+
+# Python virtual environment & cache
+.venv/
+__pycache__/
+*.pyc
+
+# OS
+.DS_Store
+Thumbs.db

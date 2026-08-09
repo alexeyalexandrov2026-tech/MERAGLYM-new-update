@@ -1,50 +1,46 @@
-import { PrismaPg } from "@prisma/adapter-pg";
+import { PrismaD1 } from "@prisma/adapter-d1";
 import { PrismaClient } from "@prisma/client";
-import { Pool } from "pg";
 
 type PrismaGlobals = {
   prisma?: PrismaClient;
-  pool?: Pool;
 };
 
 const globalForPrisma = globalThis as typeof globalThis & PrismaGlobals;
 
-function createPrismaClient(): PrismaClient {
-  const databaseUrl = process.env.DATABASE_URL;
-
-  if (!databaseUrl) {
-    throw new Error("DATABASE_URL environment variable is required at runtime.");
+function getD1Binding() {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { getCloudflareContext } = require("@opennextjs/cloudflare");
+    const ctx = getCloudflareContext();
+    if (ctx?.env?.DB) return ctx.env.DB;
+  } catch {
+    // Ignore error if context isn't available
   }
 
-  const pool =
-    globalForPrisma.pool ??
-    new Pool({
-      connectionString: databaseUrl,
-      max: 10,
-      idleTimeoutMillis: 30_000,
-      connectionTimeoutMillis: 5_000,
-    });
+  const g = globalThis as unknown as Record<string, unknown>;
+  if (g.DB) return g.DB;
+  if ((process.env as unknown as Record<string, unknown>).DB) return (process.env as unknown as Record<string, unknown>).DB;
 
-  const client =
-    globalForPrisma.prisma ??
-    new PrismaClient({
-      adapter: new PrismaPg(pool),
-      log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
-    });
-
-  if (process.env.NODE_ENV !== "production") {
-    globalForPrisma.pool = pool;
-    globalForPrisma.prisma = client;
-  }
-
-  return client;
+  return undefined;
 }
 
-let prismaClient: PrismaClient | undefined;
+export function createPrismaClient(): PrismaClient {
+  const d1 = getD1Binding();
+  if (d1) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const adapter = new PrismaD1(d1 as any);
+    return new PrismaClient({ adapter });
+  }
+
+  return globalForPrisma.prisma ?? new PrismaClient();
+}
 
 export function getPrisma(): PrismaClient {
-  prismaClient ??= createPrismaClient();
-  return prismaClient;
+  if (process.env.NODE_ENV !== "production") {
+    globalForPrisma.prisma ??= createPrismaClient();
+    return globalForPrisma.prisma;
+  }
+  return createPrismaClient();
 }
 
 const prisma = new Proxy({} as PrismaClient, {

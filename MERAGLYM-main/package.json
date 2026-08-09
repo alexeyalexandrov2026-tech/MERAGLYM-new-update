@@ -18,15 +18,19 @@
     "node": ">=22.12.0"
   },
   "dependencies": {
+    "@prisma/adapter-d1": "^7.9.1",
     "@prisma/adapter-pg": "^7.9.1",
     "@prisma/client": "^7.9.1",
+    "dotenv": "^17.4.2",
     "next": "16.3.0",
     "pg": "^8.22.0",
     "react": "19.2.8",
-    "react-dom": "19.2.8",
-    "dotenv": "^17.4.2"
+    "react-dom": "19.2.8"
   },
   "devDependencies": {
+    "@cloudflare/next-on-pages": "^1.13.16",
+    "@cloudflare/workers-types": "^5.20260809.1",
+    "@opennextjs/cloudflare": "^1.20.2",
     "@types/node": "^20.19.43",
     "@types/pg": "^8.21.0",
     "@types/react": "^19",

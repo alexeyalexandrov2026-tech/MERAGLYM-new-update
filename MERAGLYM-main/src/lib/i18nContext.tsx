@@ -16,21 +16,21 @@ export const I18nProvider = ({ children }: { children: ReactNode }) => {
 
   const t = (key: string): string => {
     const keys = key.split(".");
-    let value: any = dictionaries[locale];
+    let value: unknown = dictionaries[locale];
     for (const k of keys) {
-      if (value === undefined) break;
-      value = value[k];
+      if (!value || typeof value !== "object") break;
+      value = (value as Record<string, unknown>)[k];
     }
     
-    if (value === undefined) {
-      let fallbackValue: any = dictionaries["en"];
+    if (value === undefined || typeof value !== "string") {
+      let fallbackValue: unknown = dictionaries["en"];
       for (const k of keys) {
-        if (fallbackValue === undefined) return key;
-        fallbackValue = fallbackValue[k];
+        if (!fallbackValue || typeof fallbackValue !== "object") return key;
+        fallbackValue = (fallbackValue as Record<string, unknown>)[k];
       }
-      return fallbackValue as string;
+      return typeof fallbackValue === "string" ? fallbackValue : key;
     }
-    return value as string;
+    return value;
   };
 
   return (

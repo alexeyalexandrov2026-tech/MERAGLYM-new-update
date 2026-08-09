@@ -108,6 +108,34 @@ const TreeNode = ({
 
 export default function Sidebar({ initialNodes, onSelectNode, selectedNodeId }: SidebarProps) {
   const { t } = useI18n();
+  const hasInitial = Boolean(initialNodes && initialNodes.length > 0);
+  const [nodes, setNodes] = useState<Node[]>(initialNodes || []);
+  const [loading, setLoading] = useState(!hasInitial);
+
+  const displayNodes = hasInitial ? initialNodes! : nodes;
+
+  useEffect(() => {
+    if (hasInitial) {
+      return;
+    }
+
+    let isMounted = true;
+    fetch("/api/nodes")
+      .then((res) => res.json())
+      .then((data) => {
+        if (isMounted && Array.isArray(data)) {
+          setNodes(data);
+        }
+      })
+      .catch((err) => console.error("Failed to fetch root nodes:", err))
+      .finally(() => {
+        if (isMounted) setLoading(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [hasInitial]);
 
   return (
     <div
@@ -137,12 +165,17 @@ export default function Sidebar({ initialNodes, onSelectNode, selectedNodeId }: 
           {t("sidebar.sysIndex")}
         </h2>
         <div style={{ fontSize: "11px", color: "var(--text-secondary)", fontFamily: "var(--font-mono)" }}>
-          {t("sidebar.rootCategories")} // {initialNodes.length} {t("sidebar.entries")}
+          {t("sidebar.rootCategories")} {"//"} {displayNodes.length} {t("sidebar.entries")}
         </div>
       </div>
       
       <div style={{ padding: "10px 0" }}>
-        {initialNodes.map((node) => (
+        {loading && displayNodes.length === 0 && (
+          <div style={{ padding: "20px", color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: "12px" }}>
+            Loading OSINT Index...
+          </div>
+        )}
+        {displayNodes.map((node) => (
           <TreeNode
             key={node.id}
             node={node}

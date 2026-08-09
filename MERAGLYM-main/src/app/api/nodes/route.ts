@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 
-export const runtime = "nodejs";
-
 export async function GET(request: NextRequest) {
   const parentIdParam = request.nextUrl.searchParams.get("parentId");
   let parentId: number | null = null;
