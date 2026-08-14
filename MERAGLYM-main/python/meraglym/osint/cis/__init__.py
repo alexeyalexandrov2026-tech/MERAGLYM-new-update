@@ -4,6 +4,8 @@ from .efrsb import EfrsbAdapter
 from .fns import FnsAdapter
 from .sudrf import SudrfAdapter
 from .mvd import MvdAdapter
+from .kad import KadAdapter
+from .fssp import FsspAdapter
 
 __all__ = [
     "EgrulAdapter",
@@ -11,5 +13,7 @@ __all__ = [
     "EfrsbAdapter",
     "FnsAdapter",
     "SudrfAdapter",
-    "MvdAdapter"
+    "MvdAdapter",
+    "KadAdapter",
+    "FsspAdapter"
 ]

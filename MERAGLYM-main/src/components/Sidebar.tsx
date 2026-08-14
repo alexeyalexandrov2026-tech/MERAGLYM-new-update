@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import type { Node } from "@prisma/client";
 import { useI18n } from "@/lib/i18nContext";
 
@@ -25,9 +25,7 @@ const TreeNode = ({
   const [children, setChildren] = useState<Node[]>([]);
   const [loading, setLoading] = useState(false);
   const [hasFetched, setHasFetched] = useState(false);
-  
-  // Predict if it has children based on type, otherwise wait for fetch.
-  // arf.json folders usually have children.
+
   const mightHaveChildren = node.type === "folder";
   const isSelected = selectedNodeId === node.id;
 
@@ -38,7 +36,7 @@ const TreeNode = ({
         const res = await fetch(`/api/nodes?parentId=${node.id}`);
         if (res.ok) {
           const data = (await res.json()) as Node[];
-          setChildren(data);
+          setChildren(Array.isArray(data) ? data : []);
         }
       } catch (err) {
         console.error("Failed to load children", err);
@@ -51,16 +49,16 @@ const TreeNode = ({
   };
 
   return (
-    <div style={{ marginLeft: level > 0 ? "16px" : "0" }}>
+    <div style={{ marginLeft: level > 0 ? "14px" : "0" }}>
       <div
         className={`node-item ${isSelected ? "node-active" : ""}`}
         style={{
           display: "flex",
           alignItems: "center",
-          padding: "8px 12px",
+          padding: "6px 12px",
           borderLeft: "2px solid transparent",
           color: isSelected ? "var(--text-accent)" : "var(--text-primary)",
-          fontSize: "14px",
+          fontSize: "13px",
           userSelect: "none",
           cursor: "pointer",
         }}
@@ -71,26 +69,30 @@ const TreeNode = ({
       >
         <span
           style={{
-            marginRight: "8px",
+            marginRight: "6px",
             fontFamily: "var(--font-mono)",
             opacity: 0.7,
-            width: "20px",
+            width: "18px",
             display: "inline-block",
-            textAlign: "center"
+            textAlign: "center",
+            fontSize: "11px",
           }}
         >
-          {loading ? "..." : (mightHaveChildren ? (expanded ? "[-]" : "[+]") : "›")}
+          {loading ? "..." : mightHaveChildren ? (expanded ? "[-]" : "[+]") : "›"}
         </span>
-        <span style={{ 
-          fontFamily: node.type === "folder" ? "var(--font-mono)" : "var(--font-inter)",
-          fontWeight: node.type === "folder" ? "bold" : "normal",
-          letterSpacing: node.type === "folder" ? "0.5px" : "normal"
-        }}>
+        <span
+          style={{
+            fontFamily: node.type === "folder" ? "var(--font-mono)" : "var(--font-sans)",
+            fontWeight: node.type === "folder" ? "bold" : "normal",
+            letterSpacing: node.type === "folder" ? "0.4px" : "normal",
+            fontSize: node.type === "folder" ? "12px" : "13px",
+          }}
+        >
           {node.name}
         </span>
       </div>
       {expanded && children.length > 0 && (
-        <div style={{ borderLeft: "1px dashed var(--border-muted)" }}>
+        <div style={{ borderLeft: "1px dashed var(--border-muted)", marginLeft: "8px" }}>
           {children.map((child) => (
             <TreeNode
               key={child.id}
@@ -107,10 +109,12 @@ const TreeNode = ({
 };
 
 export default function Sidebar({ initialNodes, onSelectNode, selectedNodeId }: SidebarProps) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const hasInitial = Boolean(initialNodes && initialNodes.length > 0);
   const [nodes, setNodes] = useState<Node[]>(initialNodes || []);
   const [loading, setLoading] = useState(!hasInitial);
+  const [filterRegion, setFilterRegion] = useState<"ALL" | "CIS" | "GLOBAL">("ALL");
+  const [searchFilter, setSearchFilter] = useState("");
 
   const displayNodes = hasInitial ? initialNodes! : nodes;
 
@@ -137,11 +141,45 @@ export default function Sidebar({ initialNodes, onSelectNode, selectedNodeId }: 
     };
   }, [hasInitial]);
 
+  const filteredNodes = useMemo(() => {
+    return displayNodes.filter((node) => {
+      if (searchFilter.trim()) {
+        const query = searchFilter.toLowerCase();
+        const matchName = node.name.toLowerCase().includes(query);
+        const matchDesc = node.description ? node.description.toLowerCase().includes(query) : false;
+        if (!matchName && !matchDesc) return false;
+      }
+
+      if (filterRegion === "CIS") {
+        const isCis =
+          node.name.toLowerCase().includes("cis") ||
+          node.name.toLowerCase().includes("russia") ||
+          node.name.toLowerCase().includes("рф") ||
+          node.name.toLowerCase().includes("росси") ||
+          node.name.toLowerCase().includes("егрюл") ||
+          node.name.toLowerCase().includes("фнс") ||
+          node.name.toLowerCase().includes("суд");
+        return isCis;
+      }
+
+      if (filterRegion === "GLOBAL") {
+        const isCis =
+          node.name.toLowerCase().includes("cis") ||
+          node.name.toLowerCase().includes("russia") ||
+          node.name.toLowerCase().includes("рф") ||
+          node.name.toLowerCase().includes("росси");
+        return !isCis;
+      }
+
+      return true;
+    });
+  }, [displayNodes, filterRegion, searchFilter]);
+
   return (
     <div
       className="gotham-panel"
       style={{
-        width: "350px",
+        width: "360px",
         height: "100%",
         overflowY: "auto",
         display: "flex",
@@ -149,33 +187,112 @@ export default function Sidebar({ initialNodes, onSelectNode, selectedNodeId }: 
         borderRight: "1px solid var(--border-highlight)",
         borderTop: "none",
         borderBottom: "none",
-        borderLeft: "none"
+        borderLeft: "none",
       }}
     >
-      <div style={{
-        padding: "20px",
-        borderBottom: "1px solid var(--border-primary)",
-        position: "sticky",
-        top: 0,
-        background: "var(--bg-panel)",
-        zIndex: 10,
-        backdropFilter: "blur(12px)"
-      }}>
-        <h2 style={{ color: "var(--text-accent)", fontSize: "16px", marginBottom: "4px" }}>
-          {t("sidebar.sysIndex")}
-        </h2>
-        <div style={{ fontSize: "11px", color: "var(--text-secondary)", fontFamily: "var(--font-mono)" }}>
-          {t("sidebar.rootCategories")} {"//"} {displayNodes.length} {t("sidebar.entries")}
+      {/* Sticky Header */}
+      <div
+        style={{
+          padding: "16px 20px",
+          borderBottom: "1px solid var(--border-primary)",
+          position: "sticky",
+          top: 0,
+          background: "var(--bg-panel)",
+          zIndex: 10,
+          backdropFilter: "blur(12px)",
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+          <h2 style={{ color: "var(--text-accent)", fontSize: "14px", margin: 0 }}>
+            {t("sidebar.sysIndex")}
+          </h2>
+          <div style={{ fontSize: "11px", color: "var(--text-secondary)", fontFamily: "var(--font-mono)" }}>
+            {filteredNodes.length} {t("sidebar.entries")}
+          </div>
         </div>
+
+        {/* Filter Pills */}
+        <div style={{ display: "flex", gap: "6px", marginBottom: "10px" }}>
+          <button
+            onClick={() => setFilterRegion("ALL")}
+            style={{
+              flex: 1,
+              padding: "3px 0",
+              background: filterRegion === "ALL" ? "rgba(0, 255, 204, 0.15)" : "transparent",
+              border: `1px solid ${filterRegion === "ALL" ? "var(--border-highlight)" : "var(--border-primary)"}`,
+              color: filterRegion === "ALL" ? "var(--text-accent)" : "var(--text-secondary)",
+              fontSize: "10px",
+              fontFamily: "var(--font-mono)",
+              cursor: "pointer",
+              borderRadius: "2px",
+            }}
+          >
+            {t("sidebar.filterAll")}
+          </button>
+          <button
+            onClick={() => setFilterRegion("CIS")}
+            style={{
+              flex: 1,
+              padding: "3px 0",
+              background: filterRegion === "CIS" ? "rgba(0, 255, 204, 0.15)" : "transparent",
+              border: `1px solid ${filterRegion === "CIS" ? "var(--border-highlight)" : "var(--border-primary)"}`,
+              color: filterRegion === "CIS" ? "var(--text-accent)" : "var(--text-secondary)",
+              fontSize: "10px",
+              fontFamily: "var(--font-mono)",
+              cursor: "pointer",
+              borderRadius: "2px",
+            }}
+          >
+            🇷🇺 {t("sidebar.filterCIS")}
+          </button>
+          <button
+            onClick={() => setFilterRegion("GLOBAL")}
+            style={{
+              flex: 1,
+              padding: "3px 0",
+              background: filterRegion === "GLOBAL" ? "rgba(0, 255, 204, 0.15)" : "transparent",
+              border: `1px solid ${filterRegion === "GLOBAL" ? "var(--border-highlight)" : "var(--border-primary)"}`,
+              color: filterRegion === "GLOBAL" ? "var(--text-accent)" : "var(--text-secondary)",
+              fontSize: "10px",
+              fontFamily: "var(--font-mono)",
+              cursor: "pointer",
+              borderRadius: "2px",
+            }}
+          >
+            🌐 {t("sidebar.filterGlobal")}
+          </button>
+        </div>
+
+        {/* Quick Filter Input */}
+        <input
+          type="text"
+          value={searchFilter}
+          onChange={(e) => setSearchFilter(e.target.value)}
+          placeholder={t("sidebar.searchTreePlaceholder")}
+          style={{
+            width: "100%",
+            boxSizing: "border-box",
+            background: "rgba(0, 255, 204, 0.04)",
+            border: "1px solid var(--border-primary)",
+            color: "var(--text-primary)",
+            padding: "6px 10px",
+            fontFamily: "var(--font-mono)",
+            fontSize: "11px",
+            borderRadius: "2px",
+            outline: "none",
+          }}
+        />
       </div>
-      
-      <div style={{ padding: "10px 0" }}>
+
+      {/* Tree View Nodes */}
+      <div style={{ padding: "8px 0", flex: 1 }}>
         {loading && displayNodes.length === 0 && (
           <div style={{ padding: "20px", color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: "12px" }}>
-            Loading OSINT Index...
+            {t("sidebar.loading")}
           </div>
         )}
-        {displayNodes.map((node) => (
+
+        {filteredNodes.map((node) => (
           <TreeNode
             key={node.id}
             node={node}
@@ -184,6 +301,12 @@ export default function Sidebar({ initialNodes, onSelectNode, selectedNodeId }: 
             selectedNodeId={selectedNodeId}
           />
         ))}
+
+        {!loading && filteredNodes.length === 0 && (
+          <div style={{ padding: "20px", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: "11px", textAlign: "center" }}>
+            {locale === "ru" ? "Нет элементов по фильтру" : "No elements matching filter"}
+          </div>
+        )}
       </div>
     </div>
   );

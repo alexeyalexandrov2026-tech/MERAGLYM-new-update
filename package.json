@@ -1,0 +1,12 @@
+{
+  "name": "meraglym-root",
+  "version": "2.5.0",
+  "private": true,
+  "scripts": {
+    "dev": "npm --prefix MERAGLYM-main run dev",
+    "build": "npm --prefix MERAGLYM-main run build",
+    "start": "npm --prefix MERAGLYM-main run start",
+    "typecheck": "npm --prefix MERAGLYM-main run typecheck",
+    "test": "npm --prefix MERAGLYM-main run test"
+  }
+}

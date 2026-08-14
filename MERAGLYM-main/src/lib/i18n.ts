@@ -1,5 +1,5 @@
 export const i18nConfig = {
-  defaultLocale: 'en',
+  defaultLocale: 'ru',
   locales: ['en', 'ru'],
 } as const;
 
@@ -7,106 +7,261 @@ export type Locale = (typeof i18nConfig)['locales'][number];
 
 export const dictionaries = {
   en: {
+    common: {
+      language: "Language",
+      systemOnline: "SYSTEM ONLINE",
+      encryptedUplink: "ENCRYPTED UPLINK",
+      version: "v2.5.0",
+      regionCIS: "CIS / Russia",
+      regionGlobal: "Global OSINT",
+      all: "All",
+      clear: "Clear",
+      export: "Export",
+      copied: "Copied!",
+      copy: "Copy Link",
+      close: "Close",
+      save: "Save",
+      loading: "Loading..."
+    },
     nav: {
+      agent: "AI AGENT",
       overview: "OVERVIEW",
       osint: "OSINT HIERARCHY",
       search: "GLOBAL SEARCH",
       jobs: "SYSTEM JOBS",
     },
+    header: {
+      brandTitle: "MERAGLYM // OPEN INTELLIGENCE",
+      subtitle: "TACTICAL OSINT & CYBER THREAT INTELLIGENCE PLATFORM",
+      activeModule: "ACTIVE MODULE",
+    },
     dashboard: {
       title: "MERAGLYM SYSTEM OVERVIEW",
-      welcome: "Welcome to the Meraglym OSINT Intelligence Platform. Select a module from the left navigation array to begin."
+      welcome: "Welcome to the Meraglym OSINT Intelligence Platform. Select a module from the navigation bar to begin reconnaissance and entity correlation.",
+      statsTitle: "INTELLIGENCE ENGINE METRICS",
+      registeredAdapters: "REGISTERED ADAPTERS",
+      cisEngines: "CIS / RUSSIAN ENGINES",
+      globalEngines: "GLOBAL ENGINES",
+      indexedResources: "INDEXED OSINT TOOLS",
+      dbStatus: "DATABASE PIPELINE",
+      aiStatus: "AI AGENT CORE",
+      threatGraph: "THREAT GRAPH (STIX 2.1)",
+      operationalReadiness: "OPERATIONAL READINESS",
+      ready100: "100% OPERATIONAL",
+      modulesDescription: "Active modules include Russian corporate registries (EGRUL/FNS), Financials (Bo Nalog), Court systems (SudRF/KAD), Enforcement (FSSP), Bankruptcy (EFRSB), MVD Wanted lists, Social Media Reconnaissance (Maigret/Sherlock), Email verification (Holehe/GHunt), Wireless Geolocation (GeoWiFi), Camera reconnaissance (CCTVScan), and DarkNet crawling (TorBot)."
     },
     sidebar: {
       sysIndex: "SYS.INDEX",
       rootCategories: "ROOT_CATEGORIES",
       entries: "ENTRIES",
-      loading: "..."
+      loading: "Loading OSINT Index...",
+      filterAll: "ALL",
+      filterCIS: "CIS/RU",
+      filterGlobal: "GLOBAL",
+      searchTreePlaceholder: "Filter hierarchy..."
     },
     nodeView: {
       awaitingSelection: "AWAITING_TARGET_SELECTION",
+      selectNodePrompt: "Select any category or resource from the hierarchy on the left to inspect metadata and launch uplinks.",
       initiateUplink: "INITIATE_UPLINK ↗",
+      copyLink: "COPY LINK",
       description: "DESCRIPTION",
       status: "STATUS",
       bestFor: "BEST FOR",
       pricing: "PRICING",
       input: "INPUT",
       output: "OUTPUT",
-      opsec: "OPSEC",
-      opsecNote: "OPSEC NOTE"
+      opsec: "OPSEC LEVEL",
+      opsecNote: "OPSEC NOTE",
+      tags: "TAGS & ATTRIBUTES",
+      localInstall: "Local Install",
+      googleDork: "Google Dork",
+      registration: "Registration Required",
+      api: "API Available",
+      invitationOnly: "Invite Only",
+      deprecated: "Deprecated"
     },
     searchPanel: {
-      title: "SYSTEM SEARCH // GLOBAL",
-      placeholder: "QUERY OSINT DATABASE...",
-      searching: "[SEARCHING...]",
-      noResults: "[NO RESULTS FOUND]",
-      matches: "MATCHES // RANKED BY RELEVANCE"
+      title: "SYSTEM SEARCH // GLOBAL & CIS",
+      subtitle: "Multi-dimensional querying across 1300+ indexed intelligence databases and tools",
+      placeholder: "QUERY OSINT DATABASE (e.g. INN, Email, Domain, Phone, BSSID, BTC, Shodan)...",
+      searching: "[SEARCHING OSINT INTELLIGENCE INDEX...]",
+      noResults: "[NO RESULTS FOUND FOR SPECIFIED QUERY]",
+      matches: "MATCHES // RANKED BY RELEVANCE",
+      filterAll: "All Tools",
+      filterRu: "CIS & Russia",
+      filterEmail: "Email & Leaks",
+      filterPhone: "Phone Lookup",
+      filterCompany: "Companies & Tax",
+      filterCrypto: "Crypto & Blockchain",
+      filterCamera: "Cameras & IoT",
+      filterDarkweb: "DarkWeb & Tor",
+      filterSocial: "Social Media"
     },
     jobsPanel: {
       title: "SYSTEM WORKER JOBS //",
       recent: "RECENT",
       refresh: "REFRESH",
       loading: "[LOADING JOB SCHEDULER...]",
-      noJobs: "[NO JOBS FOUND IN DATABASE]",
+      noJobs: "[NO RECENT WORKER JOBS IN DATABASE]",
       created: "CREATED:",
       started: "STARTED:",
       completed: "COMPLETED:",
-      id: "ID:"
+      id: "ID:",
+      status: "STATUS:",
+      type: "TYPE:",
+      payload: "PAYLOAD",
+      result: "RESULT",
+      error: "ERROR",
+      retry: "Retry Job"
     },
-    common: {
-      language: "Language"
+    agentChat: {
+      title: "MERAGLYM AI AGENT // THREAT & RECON BOT",
+      subtitle: "Status: Connected to Intelligence Core (D1 + AI Engine + STIX Graph)",
+      welcome: "Hello! I am the MERAGLYM Open Intelligence AI Agent. Ask me any question regarding OSINT research, Russian CIS registries, corporate analysis, entity resolution, or cyber threat intelligence.",
+      placeholder: "Ask the AI Agent a question or request an OSINT playbook...",
+      send: "Send",
+      generating: "AI Agent is generating response...",
+      matchingSources: "Matched OSINT Sources:",
+      clearChat: "Clear History",
+      exportChat: "Export Log",
+      quickPromptsTitle: "Quick Tactical Queries:",
+      prompts: [
+        "How to verify a Russian company by INN / OGRN?",
+        "How to investigate individuals (MVD Wanted, SudRF, FSSP)?",
+        "Which tools to use for deep email & account reconnaissance?",
+        "What tools trace cryptocurrency transactions (BTC, ETH, TRON)?",
+        "How does entity resolution and STIX correlation work?"
+      ]
     }
   },
   ru: {
+    common: {
+      language: "Язык",
+      systemOnline: "СИСТЕМА ОНЛАЙН",
+      encryptedUplink: "ЗАЩИЩЕННЫЙ КАНАЛ",
+      version: "v2.5.0",
+      regionCIS: "СНГ / Россия",
+      regionGlobal: "Глобальный OSINT",
+      all: "Все",
+      clear: "Очистить",
+      export: "Экспорт",
+      copied: "Скопировано!",
+      copy: "Копировать ссылку",
+      close: "Закрыть",
+      save: "Сохранить",
+      loading: "Загрузка..."
+    },
     nav: {
+      agent: "ИИ-АГЕНТ",
       overview: "ОБЗОР",
-      osint: "ОСИНТ ИЕРАРХИЯ",
+      osint: "ОСИНТ ДЕРЕВО",
       search: "ГЛОБАЛЬНЫЙ ПОИСК",
       jobs: "СИСТЕМНЫЕ ЗАДАЧИ",
     },
+    header: {
+      brandTitle: "MERAGLYM // ОТКРЫТАЯ РАЗВЕДКА",
+      subtitle: "ТАКТИЧЕСКАЯ ПЛАТФОРМА OSINT И КИБЕРРАЗВЕДКИ УГРОЗ (CTI)",
+      activeModule: "АКТИВНЫЙ МОДУЛЬ",
+    },
     dashboard: {
-      title: "СИСТЕМНЫЙ ОБЗОР MERAGLYM",
-      welcome: "Добро пожаловать в платформу разведки Meraglym OSINT. Выберите модуль из левого навигационного массива, чтобы начать."
+      title: "СИСТЕМНЫЙ ОБЗОР И МЕТРИКИ MERAGLYM",
+      welcome: "Добро пожаловать в платформу разведки MERAGLYM Open Intelligence. Выберите модуль на панели навигации для проведения разведки, поиска инструментов и корреляции сущностей.",
+      statsTitle: "ПОКАЗАТЕЛИ ДВИЖКОВ РАЗВЕДКИ",
+      registeredAdapters: "ЗАРЕГИСТРИРОВАНО АДАПТЕРОВ",
+      cisEngines: "ДВИЖКИ СНГ / РФ",
+      globalEngines: "ГЛОБАЛЬНЫЕ ДВИЖКИ",
+      indexedResources: "ИНДЕКСИРОВАНО OSINT ИНСТРУМЕНТОВ",
+      dbStatus: "КОНВЕЙЕР БАЗЫ ДАННЫХ",
+      aiStatus: "ИИ-ЯДРО АГЕНТА",
+      threatGraph: "ГРАФ УГРОЗ (STIX 2.1)",
+      operationalReadiness: "ГОТОВНОСТЬ СИСТЕМЫ",
+      ready100: "100% РАБОТОСПОСОБНА",
+      modulesDescription: "Активные модули включают реестры юридических лиц РФ (ЕГРЮЛ/ФНС), финансовую отчетность (БО Налог), судебные системы (ГАС Правосудие/КАД Арбитраж), исполнительные производства (ФССП), банкротства (ЕФРСБ), розыск МВД, поиск в соцсетях (Maigret/Sherlock), проверку Email (Holehe/GHunt), беспроводную геолокацию (GeoWiFi), сканирование камер (CCTVScan) и DarkNet (TorBot)."
     },
     sidebar: {
       sysIndex: "СИСТ.ИНДЕКС",
       rootCategories: "КОРНЕВЫЕ_КАТЕГОРИИ",
       entries: "ЗАПИСЕЙ",
-      loading: "..."
+      loading: "Загрузка дерева OSINT...",
+      filterAll: "ВСЕ",
+      filterCIS: "СНГ/РФ",
+      filterGlobal: "GLOBAL",
+      searchTreePlaceholder: "Фильтр иерархии..."
     },
     nodeView: {
       awaitingSelection: "ОЖИДАНИЕ_ВЫБОРА_ЦЕЛИ",
-      initiateUplink: "ИНИЦИАЛИЗАЦИЯ_СВЯЗИ ↗",
+      selectNodePrompt: "Выберите категорию или ресурс в левой панели для просмотра метаданных, атрибутов и перехода к источнику.",
+      initiateUplink: "ПЕРЕЙТИ К РЕСУРСУ ↗",
+      copyLink: "СКОПИРОВАТЬ ССЫЛКУ",
       description: "ОПИСАНИЕ",
       status: "СТАТУС",
-      bestFor: "ЛУЧШЕЕ ДЛЯ",
-      pricing: "ЦЕНА",
-      input: "ВВОД",
-      output: "ВЫВОД",
-      opsec: "OPSEC",
-      opsecNote: "ПРИМЕЧАНИЕ OPSEC"
+      bestFor: "ЛУЧШЕЕ ПРИМЕНЕНИЕ",
+      pricing: "ЦЕНОВАЯ МОДЕЛЬ",
+      input: "ВХОДНЫЕ ДАННЫЕ",
+      output: "ВЫХОДНЫЕ ДАННЫЕ",
+      opsec: "УРОВЕНЬ OPSEC",
+      opsecNote: "ПРИМЕЧАНИЕ OPSEC",
+      tags: "ТЕГИ И АТРИБУТЫ",
+      localInstall: "Локальная установка",
+      googleDork: "Google Dork",
+      registration: "Требуется регистрация",
+      api: "Доступен API",
+      invitationOnly: "По инвайтам",
+      deprecated: "Устарело"
     },
     searchPanel: {
-      title: "СИСТЕМНЫЙ ПОИСК // ГЛОБАЛЬНЫЙ",
-      placeholder: "ЗАПРОС К БАЗЕ ДАННЫХ OSINT...",
-      searching: "[ПОИСК...]",
-      noResults: "[РЕЗУЛЬТАТЫ НЕ НАЙДЕНЫ]",
-      matches: "СОВПАДЕНИЙ // ОТСОРТИРОВАНО ПО РЕЛЕВАНТНОСТИ"
+      title: "СИСТЕМНЫЙ ПОИСК // ГЛОБАЛЬНЫЙ И СНГ",
+      subtitle: "Многомерный поиск по 1300+ проиндексированным базам данных и инструментам разведки",
+      placeholder: "ЗАПРОС К БАЗЕ OSINT (ИНН, ОГРН, Email, телефон, домен, BSSID, BTC, Shodan)...",
+      searching: "[ПОИСК ПО БАЗЕ ЗНАНИЙ OSINT...]",
+      noResults: "[ПО ВАШЕМУ ЗАПРОСУ НИЧЕГО НЕ НАЙДЕНО]",
+      matches: "СОВПАДЕНИЙ // ОТСОРТИРОВАНО ПО РЕЛЕВАНТНОСТИ",
+      filterAll: "Все инструменты",
+      filterRu: "СНГ и Россия",
+      filterEmail: "Email и утечки",
+      filterPhone: "Поиск по телефону",
+      filterCompany: "Компании и Налоги",
+      filterCrypto: "Крипта и Блокчейн",
+      filterCamera: "Камеры и IoT",
+      filterDarkweb: "DarkWeb и Tor",
+      filterSocial: "Социальные сети"
     },
     jobsPanel: {
-      title: "СИСТЕМНЫЕ ЗАДАЧИ //",
+      title: "СИСТЕМНЫЕ ЗАДАЧИ // ОЧЕРЕДЬ ВОРКЕРОВ",
       recent: "НЕДАВНИХ",
       refresh: "ОБНОВИТЬ",
       loading: "[ЗАГРУЗКА ПЛАНИРОВЩИКА ЗАДАЧ...]",
-      noJobs: "[ЗАДАЧИ В БАЗЕ ДАННЫХ НЕ НАЙДЕНЫ]",
+      noJobs: "[НЕДАВНИЕ ЗАДАЧИ В БАЗЕ ДАННЫХ НЕ НАЙДЕНЫ]",
       created: "СОЗДАНА:",
       started: "НАЧАТА:",
       completed: "ЗАВЕРШЕНА:",
-      id: "ID:"
+      id: "ID:",
+      status: "СТАТУС:",
+      type: "ТИП:",
+      payload: "ВХОДНЫЕ ДАННЫЕ",
+      result: "РЕЗУЛЬТАТ",
+      error: "ОШИБКА",
+      retry: "Повторить задачу"
     },
-    common: {
-      language: "Язык"
+    agentChat: {
+      title: "ИИ-АГЕНТ MERAGLYM // БОТ РАЗВЕДКИ И КИБЕРУГРОЗ",
+      subtitle: "Статус: Подключено к ядру разведки (D1 + AI Engine + STIX Graph)",
+      welcome: "Здравствуйте! Я ИИ-агент платформы разведки MERAGLYM Open Intelligence. Задайте мне любой вопрос по OSINT-разведке, реестрам СНГ и РФ, корпоративному анализу, корреляции сущностей или тактическим инструментам.",
+      placeholder: "Задайте вопрос ИИ-Агенту или запросите методику разведки...",
+      send: "Отправить",
+      generating: "ИИ-Агент формирует тактический ответ...",
+      matchingSources: "Найденные источники OSINT:",
+      clearChat: "Очистить чат",
+      exportChat: "Экспорт лога",
+      quickPromptsTitle: "Быстрые тактические запросы:",
+      prompts: [
+        "Как проверить компанию в РФ по ИНН / ОГРН (ЕГРЮЛ, ФНС, БО)?",
+        "Как проверить физлицо (МВД розыск, суды СудРФ, долги ФССП)?",
+        "Какие методы и утилиты использовать для OSINT по Email (Holehe/GHunt)?",
+        "Как отслеживать криптовалютные транзакции (BTC, ETH, TRON)?",
+        "Как работает корреляция сущностей и импорт STIX 2.1?"
+      ]
     }
   }
 };
-
