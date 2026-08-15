@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import type { Node } from "@prisma/client";
 import { useI18n } from "@/lib/i18nContext";
+import { UnifiedDossierModal } from "./UnifiedDossierModal";
 
 export default function SearchPanel() {
   const { t, locale, isRussian } = useI18n();
@@ -16,6 +17,7 @@ export default function SearchPanel() {
   const [activeNode, setActiveNode] = useState<Node | null>(null);
   const [targetInput, setTargetInput] = useState("");
   const [isExecuting, setIsExecuting] = useState(false);
+  const [showUnifiedDossier, setShowUnifiedDossier] = useState(false);
   const [executionResult, setExecutionResult] = useState<any | null>(null);
 
   const filterButtons = [
@@ -372,6 +374,7 @@ export default function SearchPanel() {
       });
     } finally {
       setIsExecuting(false);
+      setShowUnifiedDossier(true);
     }
   };
 
@@ -885,6 +888,14 @@ export default function SearchPanel() {
           </div>
         </div>
       )}
+
+      {/* UNIFIED DOSSIER FINAL REPORT MODAL WINDOW */}
+      <UnifiedDossierModal
+        isOpen={showUnifiedDossier}
+        onClose={() => setShowUnifiedDossier(false)}
+        targetInput={targetInput}
+        isRussian={isRussian}
+      />
     </div>
   );
 }
