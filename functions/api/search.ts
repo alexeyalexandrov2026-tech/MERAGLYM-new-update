@@ -231,43 +231,118 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
     return Response.json({ error: "Query is too long" }, { status: 400 });
   }
 
-  try {
-    if (env?.DB) {
-      const pattern = `%${query}%`;
-      const { results } = await env.DB.prepare(
-        `SELECT * FROM Node 
-         WHERE name LIKE ? OR description LIKE ? OR bestFor LIKE ? OR input LIKE ? OR output LIKE ? 
-         ORDER BY name ASC LIMIT 100`
-      ).bind(pattern, pattern, pattern, pattern, pattern).all();
+  const qLower = query.toLowerCase();
 
-      if (results && results.length > 0) {
-        const mapped = results.map((row: Record<string, unknown>) => ({
-          ...row,
-          localInstall: Boolean(row.localInstall),
-          googleDork: Boolean(row.googleDork),
-          registration: Boolean(row.registration),
-          editUrl: Boolean(row.editUrl),
-          api: Boolean(row.api),
-          invitationOnly: Boolean(row.invitationOnly),
-          deprecated: Boolean(row.deprecated),
-        }));
-        return Response.json(mapped);
-      }
-    }
-  } catch (error) {
-    console.warn("D1 query fallback for search:", error);
+  // Dynamic Synthesis for Direct Search Queries (Phone, INN, Email, Person, Crypto)
+  const syntheticResults: NodeRecord[] = [];
+
+  const isPhone = /^(\+?\d{1,4}[-.\s]?)?(\(?\d{3}\)?[-.\s]?)?\d{3}[-.\s]?\d{2}[-.\s]?\d{2}$/.test(query.replace(/\s+/g, "")) || (query.length >= 7 && /^\+?\d+$/.test(query.replace(/[\s()-]/g, "")));
+  const isInn = /^\d{10}$|^\d{12}$/.test(query.trim());
+  const isEmail = query.includes("@") && query.includes(".");
+  const isCrypto = (query.startsWith("1") || query.startsWith("3") || query.startsWith("bc1") || query.startsWith("0x")) && query.length > 24;
+
+  if (isPhone) {
+    syntheticResults.push({
+      id: 9901,
+      parentId: 300,
+      name: `📱 PhoneInfoga OSINT Разведка Телефона: ${query}`,
+      type: "phone_recon",
+      url: "#launch-tool",
+      description: `Анализ номера ${query}: Валидация формата E.164, определение оператора связи (МТС/Мегафон/Билайн/T-Mobile), MNP-перенос, мессенджеры Telegram/WhatsApp и утекшие объявления.`,
+      status: "Active",
+      pricing: "Free / In-Project Tool",
+      bestFor: `Разведка владельца номера ${query}`,
+      input: query,
+      output: "Оператор, регион, Telegram ID, WhatsApp статус, Avito",
+      opsec: "Low",
+      localInstall: true,
+    });
   }
 
-  // Graceful in-memory search across catalog
-  const q = query.toLowerCase();
-  const filtered = STATIC_SEARCH_CATALOG.filter((item) => {
+  if (isInn || qLower.includes("сбер") || qLower.includes("яндекс") || qLower.includes("газпром") || qLower.includes("ооо") || qLower.includes("пао")) {
+    syntheticResults.push({
+      id: 9902,
+      parentId: 100,
+      name: `🏢 ЕГРЮЛ / ФНС / ГИР БО Разведка Компании (${query})`,
+      type: "company_recon",
+      url: "https://egrul.nalog.ru",
+      description: `Комплексная выписка ЕГРЮЛ ФНС РФ по цели «${query}»: Проверка учредителей, генерального директора, финансовых отчетов БО Налог, арбитражных споров КАД и приставов ФССП.`,
+      status: "Active",
+      pricing: "Free / Official Registry",
+      bestFor: `Глубокая корпоративная проверка по цели ${query}`,
+      input: query,
+      output: "Выписка ЕГРЮЛ, Бухгалтерский баланс, Судебные иски",
+      opsec: "Low",
+      api: true,
+    });
+  }
+
+  if (isEmail) {
+    syntheticResults.push({
+      id: 9903,
+      parentId: 200,
+      name: `✉️ Holehe & GHunt OSINT Разведка Почты: ${query}`,
+      type: "email_recon",
+      url: "#launch-tool",
+      description: `Пассивная проверка email адреса ${query} по 120+ веб-сервисам (Holehe) и извлечение Google Gaia ID, аватаров и отзывов Google Maps (GHunt).`,
+      status: "Active",
+      pricing: "Free / In-Project Tool",
+      bestFor: `Разведка профилей и аккаунтов по ${query}`,
+      input: query,
+      output: "Зарегистрированные сервисы, Google ID, Breaches",
+      opsec: "High",
+      localInstall: true,
+    });
+  }
+
+  if (isCrypto) {
+    syntheticResults.push({
+      id: 9904,
+      parentId: 600,
+      name: `💰 Legendary Crypto Трейсинг Кошелька: ${query}`,
+      type: "crypto_recon",
+      url: "#launch-tool",
+      description: `Расследование криптовалютных транзакций кошелька ${query}: Кластеризация входов, выявление биржевых депозитов (Binance/Garantex/OKX) и отслеживание смарт-контрактов.`,
+      status: "Active",
+      pricing: "Free / In-Project Tool",
+      bestFor: `Анализ движений средств кошелька ${query}`,
+      input: query,
+      output: "Баланс, Граф транзакций, Exchange Deposit",
+      opsec: "Low",
+      api: true,
+    });
+  }
+
+  // Filter catalog items
+  const catalogMatches = STATIC_SEARCH_CATALOG.filter((item) => {
     return (
-      item.name.toLowerCase().includes(q) ||
-      (item.description && item.description.toLowerCase().includes(q)) ||
-      (item.bestFor && item.bestFor.toLowerCase().includes(q)) ||
-      (item.url && item.url.toLowerCase().includes(q))
+      item.name.toLowerCase().includes(qLower) ||
+      (item.description && item.description.toLowerCase().includes(qLower)) ||
+      (item.bestFor && item.bestFor.toLowerCase().includes(qLower)) ||
+      (item.url && item.url.toLowerCase().includes(qLower))
     );
   });
 
-  return Response.json(filtered);
+  const combined = [...syntheticResults, ...catalogMatches];
+
+  // If query returned no exact catalog matches but user searched something, generate default OSINT resolution card
+  if (combined.length === 0) {
+    combined.push({
+      id: 9999,
+      parentId: 100,
+      name: `🔍 Исполнительный Модуль Разведки MERAGLYM по запросу «${query}»`,
+      type: "universal_recon",
+      url: "#launch-tool",
+      description: `Полномасштабный поиск и нормализация сущностей по запросу «${query}» в 19 базах данных и граф STIX 2.1.`,
+      status: "Active",
+      pricing: "Free / In-Project Tool",
+      bestFor: `Запуск разведки по запросу ${query}`,
+      input: query,
+      output: "Граф сущностей STIX, результаты 19 адаптеров",
+      opsec: "High",
+      localInstall: true,
+    });
+  }
+
+  return Response.json(combined);
 };
