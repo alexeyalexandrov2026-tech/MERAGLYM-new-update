@@ -4,10 +4,17 @@ version = "0.1.0"
 description = "MERAGLYM ETL and OSINT worker"
 requires-python = ">=3.13"
 dependencies = [
+    "beautifulsoup4>=4.15.0",
+    "cryptography>=50.0.0",
+    "duckduckgo-search>=8.1.1",
+    "exifread>=3.5.1",
+    "holehe>=1.61",
     "httpx>=0.28.1",
+    "phonenumbers>=9.0.37",
     "psycopg[binary]>=3.3.4",
     "pydantic>=2.13.4",
     "python-dotenv>=1.2.2",
+    "stix2>=3.0.2",
 ]
 
 [dependency-groups]
@@ -16,6 +23,11 @@ dev = [
     "pytest-asyncio>=1.4.0",
     "ruff>=0.16.2",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+asyncio_mode = "strict"
 
 [tool.uv]
 package = false
