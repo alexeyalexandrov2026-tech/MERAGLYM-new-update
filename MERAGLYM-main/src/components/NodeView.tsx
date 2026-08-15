@@ -450,34 +450,205 @@ export default function NodeView({ node }: NodeViewProps) {
             {executionResult && (
               <div
                 style={{
-                  background: "rgba(0, 0, 0, 0.6)",
-                  border: "1px solid var(--border-primary)",
-                  borderRadius: "4px",
-                  padding: "16px",
+                  background: "rgba(0, 10, 20, 0.85)",
+                  border: "1px solid var(--border-highlight)",
+                  borderRadius: "6px",
+                  padding: "20px",
                   fontFamily: "var(--font-mono)",
                   fontSize: "12px",
                   color: "var(--text-primary)",
-                  maxHeight: "260px",
+                  maxHeight: "420px",
                   overflowY: "auto",
+                  boxShadow: "inset 0 0 20px rgba(0, 255, 204, 0.05)",
                 }}
               >
-                <div style={{ color: "var(--text-accent)", marginBottom: "8px", fontWeight: "bold" }}>
-                  ✓ [STATUS: {executionResult.status}] — {executionResult.adapter}
+                {/* Header Status */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--border-primary)", paddingBottom: "12px", marginBottom: "16px" }}>
+                  <div>
+                    <span style={{ color: "var(--text-accent)", fontWeight: "bold", fontSize: "13px" }}>
+                      ✓ [STATUS: {executionResult.status}]
+                    </span>
+                    <span style={{ color: "var(--text-secondary)", marginLeft: "8px", fontSize: "11px" }}>
+                      — {executionResult.adapter}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: "11px", color: "var(--accent-electric)", background: "rgba(0, 255, 204, 0.1)", padding: "3px 8px", borderRadius: "3px" }}>
+                    {executionResult.confidence}
+                  </div>
                 </div>
-                <div style={{ color: "var(--text-secondary)", marginBottom: "4px" }}>
-                  • Цель: <b>{executionResult.target}</b>
-                </div>
-                <div style={{ color: "var(--text-secondary)", marginBottom: "4px" }}>
-                  • Время запуска: {executionResult.timestamp}
-                </div>
-                <div style={{ color: "var(--text-secondary)", marginBottom: "12px" }}>
-                  • Доверительный скоринг: {executionResult.confidence}
-                </div>
-                <div style={{ borderTop: "1px dashed var(--border-primary)", paddingTop: "8px", color: "var(--accent-electric)" }}>
-                  <pre style={{ margin: 0, whiteSpace: "pre-wrap" }}>
-                    {JSON.stringify(executionResult.data, null, 2)}
-                  </pre>
-                </div>
+
+                {/* PHONE INTELLIGENCE RICH DASHBOARD */}
+                {executionResult.data?.phone_intelligence ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                    {/* Telecom Details Box */}
+                    <div style={{ background: "rgba(255, 255, 255, 0.03)", border: "1px solid var(--border-muted)", borderRadius: "4px", padding: "14px" }}>
+                      <div style={{ color: "var(--text-accent)", fontWeight: "bold", marginBottom: "10px", fontSize: "13px" }}>
+                        📱 РЕЗУЛЬТАТЫ РАЗВЕДКИ ТЕЛЕФОНА: {executionResult.data.phone_intelligence.national_format}
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "10px", fontSize: "12px" }}>
+                        <div>• Оператор связи: <b style={{ color: "#00ffcc" }}>{executionResult.data.phone_intelligence.operator}</b></div>
+                        <div>• Регион: <b style={{ color: "var(--text-primary)" }}>{executionResult.data.phone_intelligence.region_jurisdiction}</b></div>
+                        <div>• DEF-код: <b style={{ color: "var(--text-primary)" }}>{executionResult.data.phone_intelligence.def_code}</b></div>
+                        <div>• Часовой пояс: <b style={{ color: "var(--text-primary)" }}>{executionResult.data.phone_intelligence.timezone}</b></div>
+                        <div>• Тип связи: <b style={{ color: "var(--text-primary)" }}>{executionResult.data.phone_intelligence.line_type}</b></div>
+                        <div>• MNP статус: <b style={{ color: "#00ffcc" }}>{executionResult.data.phone_intelligence.mnp_transfer_check}</b></div>
+                      </div>
+                    </div>
+
+                    {/* Quick Messengers Actions */}
+                    <div>
+                      <div style={{ color: "var(--text-secondary)", fontSize: "11px", marginBottom: "8px", fontWeight: "bold", letterSpacing: "1px" }}>
+                        💬 ПРЯМАЯ ИДЕНТИФИКАЦИЯ В МЕССЕНДЖЕРАХ (ФОТО / ИМЯ / VCARD):
+                      </div>
+                      <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                        <a
+                          href={executionResult.data.messengers_and_social.telegram_link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "6px",
+                            padding: "8px 14px",
+                            background: "rgba(0, 136, 255, 0.2)",
+                            border: "1px solid #0088ff",
+                            color: "#ffffff",
+                            textDecoration: "none",
+                            borderRadius: "4px",
+                            fontSize: "12px",
+                            fontWeight: "bold",
+                          }}
+                        >
+                          ✈️ Открыть профиль Telegram ↗
+                        </a>
+                        <a
+                          href={executionResult.data.messengers_and_social.whatsapp_link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "6px",
+                            padding: "8px 14px",
+                            background: "rgba(37, 211, 102, 0.2)",
+                            border: "1px solid #25d366",
+                            color: "#ffffff",
+                            textDecoration: "none",
+                            borderRadius: "4px",
+                            fontSize: "12px",
+                            fontWeight: "bold",
+                          }}
+                        >
+                          🟢 Открыть чат WhatsApp ↗
+                        </a>
+                      </div>
+                    </div>
+
+                    {/* Instant OSINT Dorks */}
+                    <div>
+                      <div style={{ color: "var(--text-secondary)", fontSize: "11px", marginBottom: "8px", fontWeight: "bold", letterSpacing: "1px" }}>
+                        🔍 ПОИСК ОБЪЯВЛЕНИЙ, РЕЗЮМЕ И СЛЕДОВ ВЛАДЕЛЬЦА В СЕТИ:
+                      </div>
+                      <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                        <a
+                          href={`https://google.com/search?q="${executionResult.data.phone_intelligence.e164_format}" OR "${executionResult.data.phone_intelligence.national_format}" site:avito.ru`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            padding: "6px 12px",
+                            background: "rgba(255, 184, 108, 0.15)",
+                            border: "1px solid #ffb86c",
+                            color: "#ffb86c",
+                            textDecoration: "none",
+                            borderRadius: "4px",
+                            fontSize: "11px",
+                          }}
+                        >
+                          📦 Искать на Авито ↗
+                        </a>
+                        <a
+                          href={`https://google.com/search?q="${executionResult.data.phone_intelligence.e164_format}" OR "${executionResult.data.phone_intelligence.national_format}" site:hh.ru`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            padding: "6px 12px",
+                            background: "rgba(255, 85, 85, 0.15)",
+                            border: "1px solid #ff5555",
+                            color: "#ff5555",
+                            textDecoration: "none",
+                            borderRadius: "4px",
+                            fontSize: "11px",
+                          }}
+                        >
+                          📄 Резюме HeadHunter ↗
+                        </a>
+                        <a
+                          href={`https://yandex.ru/search/?text="${executionResult.data.phone_intelligence.national_format}"`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            padding: "6px 12px",
+                            background: "rgba(255, 255, 255, 0.08)",
+                            border: "1px solid var(--border-primary)",
+                            color: "var(--text-primary)",
+                            textDecoration: "none",
+                            borderRadius: "4px",
+                            fontSize: "11px",
+                          }}
+                        >
+                          🌐 Поиск в Яндексе ↗
+                        </a>
+                        <a
+                          href={`https://google.com/search?q="${executionResult.data.phone_intelligence.e164_format}" site:vk.com`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            padding: "6px 12px",
+                            background: "rgba(0, 136, 255, 0.15)",
+                            border: "1px solid var(--border-muted)",
+                            color: "#0088ff",
+                            textDecoration: "none",
+                            borderRadius: "4px",
+                            fontSize: "11px",
+                          }}
+                        >
+                          👥 Профиль VKontakte ↗
+                        </a>
+                      </div>
+                    </div>
+
+                    {/* How-to Workflow */}
+                    <div style={{ background: "rgba(0, 255, 204, 0.04)", border: "1px dashed var(--border-highlight)", borderRadius: "4px", padding: "12px" }}>
+                      <div style={{ color: "var(--text-accent)", fontWeight: "bold", fontSize: "11px", marginBottom: "6px" }}>
+                        🎯 КАК УСТАНОВИТЬ ЛИЧНОСТЬ ВЛАДЕЛЬЦА:
+                      </div>
+                      <div style={{ fontSize: "11px", color: "var(--text-secondary)", lineHeight: 1.6 }}>
+                        1. Нажмите <b>«Открыть профиль Telegram»</b> — у большинства пользователей открывается реальное имя и фото.<br />
+                        2. Нажмите <b>«Искать на Авито»</b> — номер проверяется по архивам проданных авто, квартир и товаров с именем продавца.<br />
+                        3. По закону 152-ФЗ паспортные данные операторов закрыты, поэтому идентификация проводится по связке: Мессенджер + Авито + Регион <b>{executionResult.data.phone_intelligence.region_jurisdiction}</b>.
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  /* GENERAL OBJECT SUMMARY */
+                  <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                    <div style={{ color: "var(--text-accent)", fontSize: "13px" }}>
+                      🎯 Объект: <b>{executionResult.target}</b>
+                    </div>
+                    {executionResult.data?.summary && (
+                      <div style={{ color: "var(--text-secondary)", fontSize: "12px", lineHeight: 1.5 }}>
+                        {executionResult.data.summary}
+                      </div>
+                    )}
+                    {executionResult.data?.findings && (
+                      <ul style={{ margin: 0, paddingLeft: "18px", color: "var(--text-primary)", fontSize: "12px" }}>
+                        {executionResult.data.findings.map((f: string, i: number) => (
+                          <li key={i} style={{ marginBottom: "4px" }}>{f}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
