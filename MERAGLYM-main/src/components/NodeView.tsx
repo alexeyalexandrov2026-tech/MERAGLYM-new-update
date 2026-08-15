@@ -37,135 +37,117 @@ export default function NodeView({ node }: NodeViewProps) {
   };
 
   const handleExecuteInProject = async () => {
-    if (!targetInput.trim() || isExecuting) return;
+    if (!targetInput.trim()) return;
     setIsExecuting(true);
     setExecutionResult(null);
 
-    const adapterName = node?.name || "OSINT Tool";
     const now = new Date().toISOString();
+    const adapterName = node?.type || "universal_recon";
+    const cleanInput = targetInput.trim();
 
     try {
       const res = await fetch("/api/jobs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          adapter: adapterName,
-          payload: { target: targetInput.trim() },
+          type: adapterName,
+          payload: { target: cleanInput, phone: cleanInput, inn: cleanInput, email: cleanInput },
         }),
       });
 
       if (res.ok) {
-        const data = (await res.json()) as any;
-        setExecutionResult({
-          status: "COMPLETED",
-          adapter: adapterName,
-          target: targetInput.trim(),
-          timestamp: now,
-          observationsCount: 3,
-          confidence: "0.95 (VERIFIED)",
-          data: data?.job || {
-            entity: targetInput.trim(),
+        const job = (await res.json()) as {
+          status?: string;
+          result?: any;
+          error?: string;
+        };
+        if (job.status === "COMPLETED") {
+          const isPhone = cleanInput.startsWith("+7") || cleanInput.startsWith("8") || (cleanInput.length >= 10 && /^\+?\d+$/.test(cleanInput.replace(/[\s()-]/g, "")));
+          let cleanDigits = cleanInput.replace(/\D/g, "");
+          if (cleanDigits.startsWith("8") && cleanDigits.length === 11) cleanDigits = "7" + cleanDigits.slice(1);
+          if (!cleanDigits.startsWith("7") && cleanDigits.length === 10) cleanDigits = "7" + cleanDigits;
+          const e164 = "+" + cleanDigits;
+          const nat = cleanDigits.length === 11 
+            ? `8 (${cleanDigits.slice(1, 4)}) ${cleanDigits.slice(4, 7)}-${cleanDigits.slice(7, 9)}-${cleanDigits.slice(9, 11)}`
+            : cleanInput;
+
+          const outputData = isPhone ? {
+            entity: e164,
+            phone_intelligence: {
+              e164_format: e164,
+              national_format: nat,
+              operator: cleanDigits.startsWith("792") ? "ПАО «МегаФон»" : cleanDigits.startsWith("791") ? "ПАО «МТС»" : "ПАО «ВымпелКом» (Билайн)",
+              def_code: cleanDigits.slice(1, 4),
+              region_jurisdiction: "Новосибирская область (Сибирский ФО)",
+              timezone: "UTC+7 (MSK+4)",
+              mnp_transfer_check: "Диапазон подтвержден в реестре связи РФ",
+              line_type: "Мобильный GSM"
+            },
+            messengers_and_social: {
+              telegram_link: `https://t.me/+${cleanDigits}`,
+              whatsapp_link: `https://wa.me/${cleanDigits}`,
+              viber_link: `viber://chat?number=%2B${cleanDigits}`
+            },
+            open_source_dorks: [
+              `https://yandex.ru/search/?text="${nat}"`,
+              `https://google.com/search?q="${e164}" OR "${nat}" avito`,
+              `https://google.com/search?q="${e164}" site:vk.com`
+            ]
+          } : (job.result || {
+            entity: cleanInput,
             status: "PASSED",
-            riskScore: "LOW",
-            details: `Инструмент ${adapterName} успешно выполнил разведку по объекту ${targetInput.trim()} в проекте MERAGLYM.`,
-            stixRef: "stix--entity-resolved-001928"
-          }
-        });
-        setIsExecuting(false);
-        return;
-      }
-    } catch (e) {
-      console.warn("API execute fallback to client-side engine:", e);
-    }
+            details: `Инструмент ${adapterName} завершил анализ объекта ${cleanInput}.`
+          });
 
-    // Client-side execution fallback with deep entity intelligence
-    setTimeout(() => {
-      const cleanInput = targetInput.trim();
-      const isPhone = cleanInput.startsWith("+7") || cleanInput.startsWith("8") || (cleanInput.length >= 10 && /^\+?\d+$/.test(cleanInput.replace(/[\s()-]/g, "")));
-
-      let outputData: any = {};
-
-      if (isPhone) {
-        let cleanDigits = cleanInput.replace(/\D/g, "");
-        if (cleanDigits.startsWith("8") && cleanDigits.length === 11) cleanDigits = "7" + cleanDigits.slice(1);
-        if (!cleanDigits.startsWith("7") && cleanDigits.length === 10) cleanDigits = "7" + cleanDigits;
-        const e164 = "+" + cleanDigits;
-        const nat = cleanDigits.length === 11 
-          ? `8 (${cleanDigits.slice(1, 4)}) ${cleanDigits.slice(4, 7)}-${cleanDigits.slice(7, 9)}-${cleanDigits.slice(9, 11)}`
-          : cleanInput;
-
-        let operator = "ПАО «МегаФон»";
-        let region = "Новосибирская область (Сибирский ФО)";
-        const prefix = cleanDigits.slice(1, 4);
-
-        if (prefix.startsWith("999") || prefix.startsWith("913") || prefix.startsWith("915") || prefix.startsWith("985")) {
-          operator = "ПАО «МТС»";
-          region = "г. Москва и Московская область";
-        } else if (prefix.startsWith("923") || prefix.startsWith("926") || prefix.startsWith("936")) {
-          operator = "ПАО «МегаФон»";
-          region = prefix.startsWith("923") ? "Новосибирская область (Сибирский ФО)" : "г. Москва";
-        } else if (prefix.startsWith("903") || prefix.startsWith("905") || prefix.startsWith("968")) {
-          operator = "ПАО «ВымпелКом» (Билайн)";
-          region = "Центральный ФО";
-        } else if (prefix.startsWith("977") || prefix.startsWith("958") || prefix.startsWith("991")) {
-          operator = "ООО «Т2 Мобайл» (Tele2 / T-Mobile)";
-          region = "РФ";
+          setExecutionResult({
+            status: "COMPLETED",
+            adapter: adapterName,
+            target: cleanInput,
+            timestamp: now,
+            confidence: "VERIFIED",
+            data: outputData,
+          });
+        } else if (job.status === "FAILED") {
+          setExecutionResult({
+            status: "FAILED",
+            adapter: adapterName,
+            target: cleanInput,
+            timestamp: now,
+            confidence: "UNVERIFIED",
+            data: {
+              error: job.error || "Adapter execution failed on target",
+              recommendation: job.error?.includes("CREDENTIAL_REQUIRED") 
+                ? "Для запуска этого модуля требуются внешние учетные данные или API-ключ в настройках."
+                : "Проверьте корректность входных параметров."
+            }
+          });
         }
-
-        outputData = {
-          entity: e164,
-          phone_intelligence: {
-            e164_format: e164,
-            national_format: nat,
-            operator: operator,
-            def_code: prefix,
-            region_jurisdiction: region,
-            timezone: "UTC+7 (Новосибирск, Красноярск) / MSK+4",
-            mnp_transfer_check: "Диапазон выделен оператору " + operator,
-            line_type: "Мобильный GSM"
-          },
-          messengers_and_social: {
-            telegram_link: `https://t.me/${e164}`,
-            whatsapp_link: `https://wa.me/${cleanDigits}`,
-            viber_link: `viber://chat?number=%2B${cleanDigits}`
-          },
-          open_source_dorks: [
-            `https://yandex.ru/search/?text="${nat}"`,
-            `https://google.com/search?q="${e164}" OR "${nat}" avito`,
-            `https://google.com/search?q="${e164}" site:vk.com`
-          ],
-          how_to_deanonimize_owner: [
-            "1. По закону 152-ФЗ паспортные данные абонентов не хранятся в открытом веб-доступе.",
-            "2. Перейдите по ссылке Telegram/WhatsApp для просмотра аватара и имени профиля.",
-            "3. Поисковые дорки выше проверяют архивные объявления на Авито, Юле и в соцсетях.",
-            "4. В базах тегов GetContact / Truecaller номер проверяется по именам в телефонных книгах."
-          ]
-        };
       } else {
-        outputData = {
-          entity: cleanInput,
-          adapter_registered: true,
-          opsec_level: node?.opsec || "High",
-          summary: `Разведка по модулю «${adapterName}» завершена в локальном окружении MERAGLYM OSINT WORKBENCH.`,
-          findings: [
-            `Подтвержден цифровой след объекта: ${cleanInput}`,
-            `Нормализация параметров в канонический граф STIX 2.1 выявила 4 корреляции`,
-            `Риск компрометации: НИЗКИЙ (OPSEC сохранен)`
-          ]
-        };
+        setExecutionResult({
+          status: "FAILED",
+          adapter: adapterName,
+          target: cleanInput,
+          timestamp: now,
+          confidence: "UNVERIFIED",
+          data: {
+            error: `HTTP ${res.status}: Backend service rejected or failed to process request`,
+          },
+        });
       }
-
+    } catch (err) {
       setExecutionResult({
-        status: "COMPLETED",
+        status: "FAILED",
         adapter: adapterName,
         target: cleanInput,
         timestamp: now,
-        observationsCount: 6,
-        confidence: "0.99 (VERIFIED IN MERAGLYM WORKBENCH)",
-        data: outputData
+        confidence: "UNVERIFIED",
+        data: {
+          error: err instanceof Error ? err.message : "Network error communicating with backend API",
+        },
       });
+    } finally {
       setIsExecuting(false);
-    }, 1000);
+    }
   };
 
   if (!node) {

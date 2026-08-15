@@ -219,9 +219,8 @@ const STATIC_SEARCH_CATALOG: NodeRecord[] = [
   },
 ];
 
-export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
-  const url = new URL(request.url);
-  const query = url.searchParams.get("q")?.trim() ?? "";
+async function executeSearch(rawQuery: string, _category: string | null, _env?: Env): Promise<Response> {
+  const query = rawQuery.trim();
 
   if (!query) {
     return Response.json([]);
@@ -341,7 +340,6 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
 
   const combined = [...syntheticResults, ...catalogMatches];
 
-  // If query returned no exact catalog matches but user searched something, generate default OSINT resolution card
   if (combined.length === 0) {
     combined.push({
       id: 9999,
@@ -361,4 +359,24 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   }
 
   return Response.json(combined);
+}
+
+export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
+  const url = new URL(request.url);
+  const query = url.searchParams.get("q") || url.searchParams.get("query") || "";
+  const category = url.searchParams.get("category");
+  return executeSearch(query, category, env);
 };
+
+export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
+  try {
+    const body = (await request.json()) as { query?: string; q?: string; category?: string };
+    const query = body.query || body.q || "";
+    const category = body.category || null;
+    return executeSearch(query, category, env);
+  } catch {
+    return Response.json({ error: { code: "BAD_REQUEST", message: "Invalid JSON body for search request" } }, { status: 400 });
+  }
+};
+
+

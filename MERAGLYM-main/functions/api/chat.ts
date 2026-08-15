@@ -79,7 +79,12 @@ async function handleChatQuery(prompt: string, userLocale: string, env: Env) {
       const responseText = aiResponse?.response || aiResponse?.description || "";
       if (responseText) {
         return Response.json({
+          message: responseText,
           answer: responseText,
+          mode: "workers_ai",
+          model: "@cf/meta/llama-3.1-8b-instruct",
+          verified: true,
+          requestId: `req_ai_${Date.now()}`,
           sources: matchedNodes.map((n) => ({ id: n.id, name: n.name, url: n.url })),
           timestamp: new Date().toISOString(),
         });
@@ -89,11 +94,16 @@ async function handleChatQuery(prompt: string, userLocale: string, env: Env) {
     }
   }
 
-  // 2. Specialized Tactical OSINT Intelligence Generator
+  // 2. Specialized Tactical OSINT Intelligence Generator (Local Fallback)
   const responseText = generateTacticalOSINTResponse(prompt, isRussian, matchedNodes);
 
   return Response.json({
+    message: responseText,
     answer: responseText,
+    mode: "fallback",
+    model: "tactical_osint_core_v2.5",
+    verified: false,
+    requestId: `req_fallback_${Date.now()}`,
     sources: matchedNodes.map((n) => ({ id: n.id, name: n.name, url: n.url })),
     timestamp: new Date().toISOString(),
   });

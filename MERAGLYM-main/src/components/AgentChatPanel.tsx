@@ -89,7 +89,14 @@ export default function AgentChatPanel() {
       });
 
       if (res.ok) {
-        const data = (await res.json()) as { answer?: string; sources?: { id: number; name: string; url?: string }[] };
+        const data = (await res.json()) as {
+          answer?: string;
+          mode?: string;
+          model?: string;
+          requestId?: string;
+          verified?: boolean;
+          sources?: { id: number; name: string; url?: string }[];
+        };
         const agentMsg: ChatMessage = {
           id: generateId("agent"),
           sender: "agent",
@@ -101,10 +108,12 @@ export default function AgentChatPanel() {
         return;
       }
     } catch (err) {
-      console.warn("API request failed, engaging intelligent client-side fallback:", err);
+      console.warn("API request failed, engaging local tactical fallback:", err);
+    } finally {
+      setLoading(false);
     }
 
-    // High-fidelity client-side fallback engine if network/API route is unreachable
+    // Explicit fallback when API is unreachable
     const fallbackResponse = generateClientSideOSINTResponse(textToSend, isRussian);
     const fallbackMsg: ChatMessage = {
       id: generateId("agent"),
@@ -114,7 +123,6 @@ export default function AgentChatPanel() {
       sources: fallbackResponse.sources,
     };
     setMessages((prev) => [...prev, fallbackMsg]);
-    setLoading(false);
   };
 
   const handleClearChat = () => {
@@ -122,14 +130,24 @@ export default function AgentChatPanel() {
   };
 
   const handleExportChat = () => {
-    const log = messages
-      .map((m) => `[${m.timestamp}] ${m.sender === "user" ? "USER" : "AGENT"}:\n${m.text}\n`)
-      .join("\n---\n\n");
-    const blob = new Blob([log], { type: "text/plain;charset=utf-8" });
+    const exportData = {
+      exportTimestamp: new Date().toISOString(),
+      platform: "MERAGLYM Open Intelligence v2.5",
+      locale,
+      messages: messages.map((m) => ({
+        id: m.id,
+        sender: m.sender,
+        timestamp: m.timestamp,
+        text: m.text,
+        sources: m.sources || [],
+      })),
+    };
+
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `meraglym-chat-${new Date().toISOString().slice(0, 10)}.txt`;
+    a.download = `meraglym-investigation-chat-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };

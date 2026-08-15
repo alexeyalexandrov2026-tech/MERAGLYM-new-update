@@ -96,6 +96,28 @@ export default function JobsPanel({ initialJobs }: JobsPanelProps) {
     }
   };
 
+  const handleCancelJob = async (jobId: string | number) => {
+    try {
+      const res = await fetch(`/api/jobs/${jobId}/cancel`, { method: "POST" });
+      if (res.ok) {
+        await refreshNow();
+      }
+    } catch (err) {
+      console.error("Cancel job error:", err);
+    }
+  };
+
+  const handleRetryJob = async (jobId: string | number) => {
+    try {
+      const res = await fetch(`/api/jobs/${jobId}/retry`, { method: "POST" });
+      if (res.ok) {
+        await refreshNow();
+      }
+    } catch (err) {
+      console.error("Retry job error:", err);
+    }
+  };
+
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", padding: "32px 40px", overflowY: "auto" }}>
       <div style={{ maxWidth: "1000px", width: "100%", margin: "0 auto" }}>
@@ -155,7 +177,7 @@ export default function JobsPanel({ initialJobs }: JobsPanelProps) {
                   borderRadius: "4px",
                 }}
               >
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "10px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
                   <div style={{ display: "flex", gap: "14px", alignItems: "center" }}>
                     <span style={{ fontFamily: "var(--font-mono)", fontWeight: "bold", color: "var(--text-primary)", fontSize: "14px" }}>
                       {job.type}
@@ -164,19 +186,58 @@ export default function JobsPanel({ initialJobs }: JobsPanelProps) {
                       {t("jobsPanel.id")} {job.id}
                     </span>
                   </div>
-                  <div
-                    style={{
-                      color: getStatusColor(job.status),
-                      fontFamily: "var(--font-mono)",
-                      fontSize: "11px",
-                      fontWeight: "bold",
-                      background: "rgba(255,255,255,0.03)",
-                      padding: "2px 8px",
-                      borderRadius: "2px",
-                      border: `1px solid ${getStatusColor(job.status)}40`,
-                    }}
-                  >
-                    [{getLocalizedStatus(job.status)}]
+                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                    <div
+                      style={{
+                        color: getStatusColor(job.status),
+                        fontFamily: "var(--font-mono)",
+                        fontSize: "11px",
+                        fontWeight: "bold",
+                        background: "rgba(255,255,255,0.03)",
+                        padding: "2px 8px",
+                        borderRadius: "2px",
+                        border: `1px solid ${getStatusColor(job.status)}40`,
+                      }}
+                    >
+                      [{getLocalizedStatus(job.status)}]
+                    </div>
+
+                    {/* Action Controls: Cancel / Retry */}
+                    {(job.status === "RUNNING" || job.status === "QUEUED" || job.status === "PENDING") && (
+                      <button
+                        onClick={() => void handleCancelJob(job.id)}
+                        style={{
+                          background: "rgba(255, 85, 85, 0.15)",
+                          border: "1px solid #ff5555",
+                          color: "#ff5555",
+                          padding: "2px 8px",
+                          fontSize: "11px",
+                          fontFamily: "var(--font-mono)",
+                          borderRadius: "2px",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {isRussian ? "Отменить" : "Cancel"}
+                      </button>
+                    )}
+
+                    {(job.status === "FAILED" || job.status === "TIMEOUT" || job.status === "CANCELLED") && (
+                      <button
+                        onClick={() => void handleRetryJob(job.id)}
+                        style={{
+                          background: "rgba(0, 255, 204, 0.15)",
+                          border: "1px solid var(--border-highlight)",
+                          color: "var(--text-accent)",
+                          padding: "2px 8px",
+                          fontSize: "11px",
+                          fontFamily: "var(--font-mono)",
+                          borderRadius: "2px",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {isRussian ? "Повторить" : "Retry"}
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -211,3 +272,4 @@ export default function JobsPanel({ initialJobs }: JobsPanelProps) {
     </div>
   );
 }
+
