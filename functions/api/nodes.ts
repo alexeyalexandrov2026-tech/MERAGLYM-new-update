@@ -396,16 +396,23 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
       const { results } = await stmt.all();
 
       if (results && results.length > 0) {
-        const mapped = results.map((row: Record<string, unknown>) => ({
-          ...row,
-          localInstall: Boolean(row.localInstall),
-          googleDork: Boolean(row.googleDork),
-          registration: Boolean(row.registration),
-          editUrl: Boolean(row.editUrl),
-          api: Boolean(row.api),
-          invitationOnly: Boolean(row.invitationOnly),
-          deprecated: Boolean(row.deprecated),
-        }));
+        const mapped = results.map((row: Record<string, unknown>) => {
+          let rawUrl = row.url ? String(row.url) : null;
+          if (rawUrl && rawUrl.includes("github.com")) {
+            rawUrl = "#launch-tool";
+          }
+          return {
+            ...row,
+            url: rawUrl,
+            localInstall: Boolean(row.localInstall),
+            googleDork: Boolean(row.googleDork),
+            registration: Boolean(row.registration),
+            editUrl: Boolean(row.editUrl),
+            api: Boolean(row.api),
+            invitationOnly: Boolean(row.invitationOnly),
+            deprecated: Boolean(row.deprecated),
+          };
+        });
         return Response.json(mapped);
       }
     }
