@@ -257,6 +257,22 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
       opsec: "Low",
       localInstall: true,
     });
+
+    syntheticResults.push({
+      id: 9905,
+      parentId: 300,
+      name: `👤 Идентификатор Владельца Номера (Reverse Phone Lookup): ${query}`,
+      type: "phone_person_correlator",
+      url: "#launch-tool",
+      description: `Высокотехнологичный модуль корреляции ФИО и личности по номеру ${query}: Запросы в ЕГРИП/Госзакупки, извлечение профиля VCard Telegram/WhatsApp и дорки Авито/HH.ru.`,
+      status: "Active",
+      pricing: "Free / In-Project High-Tech Module",
+      bestFor: `Установление ФИО, псевдонима и бизнеса по номеру ${query}`,
+      input: query,
+      output: "ФИО владельца, ИП/ООО связка, Telegram VCard, Dorking findings",
+      opsec: "High",
+      localInstall: true,
+    });
   }
 
   if (isInn || qLower.includes("сбер") || qLower.includes("яндекс") || qLower.includes("газпром") || qLower.includes("ооо") || qLower.includes("пао")) {
