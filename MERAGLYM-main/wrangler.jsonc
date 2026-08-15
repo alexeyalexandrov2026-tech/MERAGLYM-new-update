@@ -1,7 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "meraglym",
-  "compatibility_date": "2024-09-23",
+  "compatibility_date": "2026-08-09",
   "compatibility_flags": [
     "nodejs_compat"
   ],
@@ -12,5 +12,8 @@
       "database_name": "meraglym-db",
       "database_id": "18e6b0bb-6be6-4b60-8a89-34b001531abc"
     }
-  ]
+  ],
+  "ai": {
+    "binding": "AI"
+  }
 }
