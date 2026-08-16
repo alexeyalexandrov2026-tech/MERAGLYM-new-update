@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from "react";
+import React, { createContext, useContext, useState, ReactNode, useCallback } from "react";
 import { dictionaries, Locale, i18nConfig } from "./i18n";
 
 interface I18nContextType {
@@ -16,20 +16,19 @@ const I18nContext = createContext<I18nContextType | undefined>(undefined);
 const STORAGE_KEY = "meraglym_locale_pref";
 
 export const I18nProvider = ({ children }: { children: ReactNode }) => {
-  const [locale, setLocaleState] = useState<Locale>(i18nConfig.defaultLocale);
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY) as Locale | null;
-      if (saved && i18nConfig.locales.includes(saved)) {
-        setLocaleState(saved);
+  const [locale, setLocaleState] = useState<Locale>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY) as Locale | null;
+        if (saved && i18nConfig.locales.includes(saved)) {
+          return saved;
+        }
+      } catch {
+        // Ignore localStorage read errors in SSR/sandboxes
       }
-    } catch {
-      // Ignore localStorage read errors in SSR/sandboxes
     }
-    setMounted(true);
-  }, []);
+    return i18nConfig.defaultLocale;
+  });
 
   const setLocale = useCallback((newLocale: Locale) => {
     setLocaleState(newLocale);

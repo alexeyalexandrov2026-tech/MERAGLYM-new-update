@@ -21,15 +21,17 @@ export default function Dashboard({ initialNodes, initialJobs }: DashboardProps)
   const { t, locale, toggleLocale, isRussian } = useI18n();
   const [health, setHealth] = useState<{
     databaseStatus: string;
+    catalogued: number;
     registered: number;
     operational: number;
     credentialRequired: number;
     degraded: number;
   }>({
     databaseStatus: "CONNECTED",
-    registered: 21,
-    operational: 18,
-    credentialRequired: 3,
+    catalogued: 21,
+    registered: 9,
+    operational: 9,
+    credentialRequired: 0,
     degraded: 0,
   });
 
@@ -45,14 +47,15 @@ export default function Dashboard({ initialNodes, initialJobs }: DashboardProps)
             credentialRequired?: number;
             degraded?: number;
           };
-          if (active && data.registered) {
-            setHealth({
+          if (active && data.registered !== undefined) {
+            setHealth((prev) => ({
+              ...prev,
               databaseStatus: "CONNECTED",
-              registered: data.registered,
+              registered: data.registered ?? 9,
               operational: data.operational ?? 0,
               credentialRequired: data.credentialRequired ?? 0,
               degraded: data.degraded ?? 0,
-            });
+            }));
           }
         }
       } catch (err) {
@@ -125,7 +128,9 @@ export default function Dashboard({ initialNodes, initialJobs }: DashboardProps)
           <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
             <div style={{ fontSize: "11px", fontFamily: "var(--font-mono)", color: "var(--text-muted)", display: "flex", gap: "12px" }}>
               <span>D1: <b style={{ color: "var(--text-accent)" }}>{health.databaseStatus}</b></span>
-              <span>ADAPTERS: <b style={{ color: "var(--text-accent)" }}>{health.operational}/{health.registered}</b></span>
+              <span>CATALOGUED: <b style={{ color: "var(--text-accent)" }}>{health.catalogued}</b></span>
+              <span>REGISTERED: <b style={{ color: "var(--text-accent)" }}>{health.registered}</b></span>
+              <span>OPERATIONAL: <b style={{ color: "var(--text-accent)" }}>{health.operational}</b></span>
               {health.credentialRequired > 0 && (
                 <span>AUTH REQ: <b style={{ color: "#ffb86c" }}>{health.credentialRequired}</b></span>
               )}
@@ -187,8 +192,8 @@ export default function Dashboard({ initialNodes, initialJobs }: DashboardProps)
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "16px", marginBottom: "32px" }}>
                   <MetricCard
                     label={t("dashboard.registeredAdapters")}
-                    value={String(health.registered)}
-                    subtitle={`${health.operational} OPERATIONAL / ${health.credentialRequired} CREDENTIALS`}
+                    value={String(health.catalogued)}
+                    subtitle={`${health.registered} REG / ${health.operational} OP / ${health.credentialRequired} REQ`}
                     icon="⚡"
                   />
                   <MetricCard label={t("dashboard.cisEngines")} value="8" subtitle="EGRUL / FNS / BO / MVD / SUDRF" icon="🇷🇺" />

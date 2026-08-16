@@ -106,60 +106,63 @@ export default function NodeView({ node }: NodeViewProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           type: adapterName,
-          payload: { target: cleanInput, phone: cleanInput, inn: cleanInput, email: cleanInput },
+          payload: { target: cleanInput, phone: cleanInput, inn: cleanInput, email: cleanInput, address: cleanInput },
         }),
       });
 
       if (res.ok) {
-        const job = (await res.json()) as {
+        let job = (await res.json()) as {
+          id: string;
           status?: string;
           result?: any;
-          error?: string;
+          error?: any;
         };
 
-        if (job.status === "COMPLETED") {
-          setExecutionResult({
-            status: "COMPLETED",
-            adapter: "phone_person_correlator",
-            target: cleanInput,
-            timestamp: now,
-            confidence: "VERIFIED",
-            data: isPhone ? phoneOutputData : (job.result || { entity: cleanInput, status: "PASSED" }),
-          });
-        } else if (job.status === "FAILED") {
-          setExecutionResult({
-            status: isPhone ? "COMPLETED" : "FAILED",
-            adapter: adapterName,
-            target: cleanInput,
-            timestamp: now,
-            confidence: isPhone ? "VERIFIED" : "UNVERIFIED",
-            data: isPhone ? phoneOutputData : {
-              error: job.error || "Adapter execution failed on target",
-              recommendation: "Проверьте корректность входных параметров."
+        // Poll until COMPLETED or FAILED
+        while (job.status === "QUEUED" || job.status === "RUNNING") {
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+          try {
+            const pollRes = await fetch(`/api/jobs/${job.id}`);
+            if (pollRes.ok) {
+              job = await pollRes.json();
+            } else {
+              break;
             }
-          });
+          } catch {
+            break;
+          }
         }
-      } else {
+
+        const isVerified = job.result?.verified === true;
         setExecutionResult({
-          status: isPhone ? "COMPLETED" : "FAILED",
+          status: job.status || "FAILED",
           adapter: adapterName,
           target: cleanInput,
           timestamp: now,
-          confidence: isPhone ? "VERIFIED" : "UNVERIFIED",
-          data: isPhone ? phoneOutputData : {
-            error: `HTTP ${res.status}: Backend service unavailable`,
+          confidence: isVerified ? "VERIFIED" : "LOCAL_ENRICHMENT",
+          data: job.result || job.error || { message: "Job finished", status: job.status },
+        });
+      } else {
+        setExecutionResult({
+          status: "FAILED",
+          adapter: adapterName,
+          target: cleanInput,
+          timestamp: now,
+          confidence: "UNVERIFIED",
+          data: {
+            error: { code: "HTTP_ERROR", message: `HTTP ${res.status}: Backend service unavailable` },
           },
         });
       }
     } catch (err) {
       setExecutionResult({
-        status: isPhone ? "COMPLETED" : "FAILED",
+        status: "FAILED",
         adapter: adapterName,
         target: cleanInput,
         timestamp: now,
-        confidence: isPhone ? "VERIFIED" : "UNVERIFIED",
-        data: isPhone ? phoneOutputData : {
-          error: err instanceof Error ? err.message : "Network error",
+        confidence: "UNVERIFIED",
+        data: {
+          error: { code: "NETWORK_ERROR", message: err instanceof Error ? err.message : "Network error" },
         },
       });
     } finally {
@@ -225,7 +228,7 @@ export default function NodeView({ node }: NodeViewProps) {
       >
         <div>
           <div style={{ color: "var(--accent-electric)", fontSize: "11px", fontFamily: "var(--font-mono)", marginBottom: "6px", letterSpacing: "2px" }}>
-            [ID: {node.id.toString().padStart(4, "0")}] // {node.type.toUpperCase()} // IN-PROJECT OSINT TOOL
+            [ID: {node.id.toString().padStart(4, "0")}] {"//"} {node.type.toUpperCase()} {"//"} IN-PROJECT OSINT TOOL
           </div>
           <h1 style={{ color: "var(--text-primary)", fontSize: "24px", letterSpacing: "0.5px" }}>{node.name}</h1>
         </div>

@@ -23,6 +23,8 @@ export type JobStatus =
 export interface SourceProvenance {
   sourceId: string;
   sourceType: string;
+  sourceName?: string;
+  sourceUrl?: string;
   url?: string;
   adapter: string;
   adapterVersion: string;
@@ -111,7 +113,7 @@ export interface AdapterHealthSummary {
 export interface ExecutionContext {
   requestId: string;
   jobId?: string | number;
-  timeoutMs: number;
+  timeoutMs?: number;
   env?: Record<string, unknown>;
 }
 

@@ -1,11 +1,11 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "meraglym",
+  "name": "meraglym-consumer",
+  "main": "src/index.ts",
   "compatibility_date": "2026-08-09",
   "compatibility_flags": [
     "nodejs_compat"
   ],
-  "pages_build_output_dir": "static",
   "d1_databases": [
     {
       "binding": "DB",
@@ -13,14 +13,13 @@
       "database_id": "18e6b0bb-6be6-4b60-8a89-34b001531abc"
     }
   ],
-  "ai": {
-    "binding": "AI"
-  },
   "queues": {
-    "producers": [
+    "consumers": [
       {
-        "binding": "MERAGLYM_QUEUE",
-        "queue": "meraglym-jobs"
+        "queue": "meraglym-jobs",
+        "max_batch_size": 10,
+        "max_batch_timeout": 5,
+        "max_retries": 3
       }
     ]
   }

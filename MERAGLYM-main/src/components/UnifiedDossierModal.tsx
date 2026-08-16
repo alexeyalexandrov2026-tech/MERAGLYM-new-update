@@ -5,6 +5,7 @@ export interface UnifiedDossierModalProps {
   onClose: () => void;
   targetInput: string;
   isRussian?: boolean;
+  jobData?: any;
 }
 
 export function UnifiedDossierModal({
@@ -12,115 +13,193 @@ export function UnifiedDossierModal({
   onClose,
   targetInput,
   isRussian = true,
+  jobData,
 }: UnifiedDossierModalProps) {
-  const [activeTab, setActiveTab] = useState<"summary" | "telecom" | "messengers" | "dorks" | "registries" | "stix">("summary");
   const [copied, setCopied] = useState(false);
 
   if (!isOpen) return null;
 
   const cleanInput = targetInput.trim();
-  const isPhone = cleanInput.startsWith("+7") || cleanInput.startsWith("8") || (cleanInput.length >= 10 && /^\+?\d+$/.test(cleanInput.replace(/[\s()-]/g, "")));
-  const isInn = /^\d{10}$|^\d{12}$/.test(cleanInput);
-  const isEmail = cleanInput.includes("@") && cleanInput.includes(".");
+  const isQueued = !jobData || jobData.status === "QUEUED" || jobData.status === "RUNNING";
+  const isFailed = jobData?.status === "FAILED";
 
-  // Format phone if applicable
-  let cleanDigits = cleanInput.replace(/\D/g, "");
-  if (cleanDigits.startsWith("8") && cleanDigits.length === 11) cleanDigits = "7" + cleanDigits.slice(1);
-  if (!cleanDigits.startsWith("7") && cleanDigits.length === 10) cleanDigits = "7" + cleanDigits;
-  const e164 = "+" + cleanDigits;
-  const prefix = cleanDigits.slice(1, 4);
-  const nat = cleanDigits.length === 11 
-    ? `8 (${prefix}) ${cleanDigits.slice(4, 7)}-${cleanDigits.slice(7, 9)}-${cleanDigits.slice(9, 11)}`
-    : cleanInput;
+  const renderContent = () => {
+    if (isQueued) {
+      return (
+        <div style={{ padding: "40px", textAlign: "center", color: "var(--text-accent)", fontFamily: "var(--font-mono)" }}>
+          <div style={{ fontSize: "24px", marginBottom: "16px", animation: "pulse 1.5s infinite" }}>⏳</div>
+          <h3>ОЖИДАНИЕ РЕЗУЛЬТАТОВ / В ОЧЕРЕДИ</h3>
+          <p style={{ color: "var(--text-secondary)", fontSize: "13px" }}>Запрос помещен в персистентную очередь D1.</p>
+          <p style={{ color: "var(--text-secondary)", fontSize: "13px" }}>Ожидается обработка воркером (Real execution).</p>
+          <pre style={{ textAlign: "left", background: "rgba(0,0,0,0.3)", padding: "12px", marginTop: "20px", borderRadius: "4px", fontSize: "12px" }}>
+            {JSON.stringify(jobData, null, 2)}
+          </pre>
+        </div>
+      );
+    }
 
-  let operator = "ПАО «МегаФон»";
-  let region = "Новосибирская область (Сибирский ФО)";
+    const errObj = jobData?.data?.error || jobData?.error;
+    const isCredReq = errObj?.code === "CREDENTIAL_REQUIRED" || (typeof errObj === "string" && errObj.includes("CREDENTIAL_REQUIRED"));
 
-  if (prefix.startsWith("999") || prefix.startsWith("913") || prefix.startsWith("915") || prefix.startsWith("985") || prefix.startsWith("914")) {
-    operator = "ПАО «МТС»";
-    region = prefix.startsWith("913") || prefix.startsWith("914") ? "Сибирский / Дальневосточный ФО" : "Московский регион";
-  } else if (prefix.startsWith("923") || prefix.startsWith("926") || prefix.startsWith("936") || prefix.startsWith("928") || prefix.startsWith("933")) {
-    operator = "ПАО «МегаФон»";
-    region = prefix.startsWith("923") ? "Новосибирская область (Сибирский ФО)" : "Региональный пул РФ";
-  } else if (prefix.startsWith("903") || prefix.startsWith("905") || prefix.startsWith("968") || prefix.startsWith("960")) {
-    operator = "ПАО «ВымпелКом» (Билайн)";
-    region = "Центральный / Региональный ФО";
-  } else if (prefix.startsWith("977") || prefix.startsWith("958") || prefix.startsWith("991") || prefix.startsWith("951")) {
-    operator = "ООО «Т2 Мобайл» (Tele2 / T-Mobile)";
-    region = "Федеральный пул РФ";
-  }
+    if (isFailed || isCredReq) {
+      return (
+        <div style={{ padding: "30px", fontFamily: "var(--font-mono)" }}>
+          <div style={{ background: "rgba(255, 184, 108, 0.08)", border: "1px solid #ffb86c", borderRadius: "6px", padding: "20px", marginBottom: "20px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", color: "#ffb86c", fontSize: "15px", fontWeight: "bold", marginBottom: "8px" }}>
+              <span>🔐</span>
+              <span>{isCredReq ? "ТРЕБУЕТСЯ API КЛЮЧ (CREDENTIAL_REQUIRED)" : "ОШИБКА ВЫПОЛНЕНИЯ (FAILED)"}</span>
+            </div>
+            <p style={{ color: "var(--text-secondary)", fontSize: "12px", margin: "0 0 12px 0", lineHeight: "1.5" }}>
+              {isCredReq
+                ? "Адаптер требует внешний API ключ для прямого обращения к реестру. В режиме без ключей генерация фейковых данных заблокирована."
+                : "Адаптер завершил работу с ошибкой."}
+            </p>
+            {errObj && (
+              <div style={{ background: "rgba(0,0,0,0.3)", padding: "10px 14px", borderRadius: "4px", color: "#ff5555", fontSize: "12px" }}>
+                <b>Код:</b> {typeof errObj === "object" ? errObj.code : "CREDENTIAL_REQUIRED"}<br />
+                <b>Сообщение:</b> {typeof errObj === "object" ? errObj.message : String(errObj)}
+              </div>
+            )}
+          </div>
+          <pre style={{ textAlign: "left", background: "rgba(0,0,0,0.3)", padding: "12px", borderRadius: "4px", color: "var(--text-muted)", fontSize: "11px", overflowX: "auto" }}>
+            {JSON.stringify(jobData, null, 2)}
+          </pre>
+        </div>
+      );
+    }
 
-  const dossierText = `
-=== ЕДИНЫЙ ИТОГОВЫЙ ОТЧЕТ КОМПЛЕКСНОЙ РАЗВЕДКИ MERAGLYM ===
-Дата отчета: ${new Date().toLocaleString("ru-RU")}
-Целевой объект: ${cleanInput} (${isPhone ? "Мобильный номер E.164" : isInn ? "ИНН Организации/ИП" : isEmail ? "Адрес Электронной Почты" : "Произвольный Идентификатор"})
+    const resData = jobData?.data || jobData?.result || {};
+    const provenance = resData?.source?.[0] || jobData?.source?.[0] || {};
+    const isVerified = resData?.verified === true || jobData?.verified === true;
+    const sourceType = provenance?.sourceType || resData?.mode || (isVerified ? "LIVE_EXTERNAL_SOURCE" : "LOCAL_ENRICHMENT");
+    const isExtRef = sourceType === "EXTERNAL_REFERENCE" || resData?.mode === "EXTERNAL_REFERENCE";
 
---- 1. ВЕКТОР ТЕЛЕКОМ И СВЯЗИ ---
-• Формат E.164: ${isPhone ? e164 : "N/A"}
-• Национальный формат: ${isPhone ? nat : "N/A"}
-• Оператор связи: ${isPhone ? operator : "N/A"}
-• DEF-код диапазонов: ${isPhone ? prefix : "N/A"}
-• Регион/Субъект РФ: ${isPhone ? region : "N/A"}
-• MNP Перенос номера: Подтвержден в реестре связи РФ (${isPhone ? operator : "N/A"})
+    // 1. EXTERNAL_REFERENCE Mode: Official Portal Reference & Direct Link
+    if (isExtRef) {
+      const sourceName = resData?.sourceName || provenance?.sourceName || "Официальный портал";
+      const sourceUrl = resData?.sourceUrl || provenance?.sourceUrl || provenance?.url || "#";
+      const portalTitle = resData?.portalTitle || resData?.description || "Официальный источник для ручной проверки";
+      const instructions = resData?.instructions || [
+        "1. Перейдите на официальный портал по кнопке ниже.",
+        `2. Введите параметры объекта: «${cleanInput}».`,
+        "3. Ознакомьтесь с актуальными официальными данными ведомства.",
+      ];
 
---- 2. ПРЯМЫЕ ССЫЛКИ ДЕАНОНИМИЗАЦИИ В МЕССЕНДЖЕРАХ ---
-• Telegram Profile: https://t.me/+${cleanDigits}
-• WhatsApp Direct Chat: https://wa.me/${cleanDigits}
-• Viber Protocol: viber://chat?number=%2B${cleanDigits}
+      return (
+        <div style={{ padding: "24px", fontFamily: "var(--font-mono)", fontSize: "13px" }}>
+          {/* Header Badge */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+            <div style={{ color: "#ffb86c", fontSize: "14px", fontWeight: "bold", display: "flex", alignItems: "center", gap: "8px" }}>
+              <span>🌐</span>
+              <span>ОФИЦИАЛЬНЫЙ ИСТОЧНИК ИНФОРМАЦИИ (EXTERNAL_REFERENCE)</span>
+            </div>
+            <span style={{ fontSize: "11px", padding: "3px 10px", borderRadius: "4px", background: "rgba(255, 184, 108, 0.15)", color: "#ffb86c", border: "1px solid rgba(255, 184, 108, 0.4)" }}>
+              verified=false | EXTERNAL_REFERENCE
+            </span>
+          </div>
 
---- 3. ПОИСКОВЫЕ ДОРКИ И ЦИФРОВЫЕ СЛЕДЫ ---
-• Поиск на Авито (Объявления/Авто): https://google.com/search?q="${e164}" OR "${nat}" avito
-• Резюме и Профили HH.ru: https://google.com/search?q="${e164}" OR "${nat}" site:hh.ru
-• Социальные сети VKontakte: https://google.com/search?q="${e164}" site:vk.com
-• Поисковый индекс Яндекса: https://yandex.ru/search/?text="${nat}"
+          {/* Official Source Card */}
+          <div style={{ background: "rgba(255, 184, 108, 0.05)", border: "1px solid rgba(255, 184, 108, 0.3)", borderRadius: "8px", padding: "22px", marginBottom: "20px" }}>
+            <div style={{ color: "var(--text-accent)", fontSize: "16px", fontWeight: "bold", marginBottom: "8px", display: "flex", alignItems: "center", gap: "8px" }}>
+              <span>🏛️</span>
+              <span>{sourceName}</span>
+            </div>
 
---- 4. ПРОВЕРКА ПО ГОСУДАРСТВЕННЫМ РЕЕСТРАМ РФ ---
-• ЕГРЮЛ / ЕГРИП ФНС РФ: Запрос обработан, статус "ДЕЙСТВУЕТ" (egrul.nalog.ru)
-• Исполнительные производства ФССП: Активных взысканий не обнаружено
-• Суды общей юрисдикции СудРФ: 0 совпадений по текущему идентификатору
+            <div style={{ color: "var(--text-secondary)", fontSize: "13px", lineHeight: "1.6", marginBottom: "18px" }}>
+              {portalTitle}
+            </div>
 
---- 5. ИИ-ЗАКЛЮЧЕНИЕ И РИСК-СКОРИНГ ---
-• Доверительный скоринг: 94.5% (VERIFIED)
-• Категория риска: LOW / INFORMATIONAL
-• Граф связей: Сгенерирован в стандарте STIX 2.1 (5 сущностей, 4 связи)
-=============================================================
-`.trim();
+            {/* Target Query Display */}
+            <div style={{ background: "rgba(0,0,0,0.3)", padding: "12px 16px", borderRadius: "6px", marginBottom: "18px", border: "1px solid var(--border-primary)" }}>
+              <div style={{ fontSize: "11px", color: "var(--text-muted)", marginBottom: "4px" }}>ПАРАМЕТРЫ ДЛЯ ПРОВЕРКИ:</div>
+              <div style={{ fontSize: "14px", color: "#00ffcc", fontWeight: "bold" }}>{cleanInput}</div>
+            </div>
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(dossierText);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+            {/* Instructions */}
+            <div style={{ marginBottom: "20px" }}>
+              <div style={{ fontSize: "11px", color: "var(--text-secondary)", fontWeight: "bold", marginBottom: "8px", letterSpacing: "1px" }}>
+                📋 ПОРЯДОК РУЧНОЙ ВЕРИФИКАЦИИ:
+              </div>
+              <ul style={{ margin: 0, paddingLeft: "18px", color: "var(--text-primary)", fontSize: "12px", lineHeight: "1.7" }}>
+                {Array.isArray(instructions) && instructions.map((inst: string, idx: number) => (
+                  <li key={idx}>{inst}</li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Direct Link Action Button */}
+            <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", alignItems: "center" }}>
+              <a
+                href={sourceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  padding: "10px 20px",
+                  background: "linear-gradient(90deg, rgba(255, 184, 108, 0.25), rgba(255, 140, 0, 0.25))",
+                  border: "1px solid #ffb86c",
+                  color: "#ffffff",
+                  textDecoration: "none",
+                  borderRadius: "6px",
+                  fontSize: "13px",
+                  fontWeight: "bold",
+                  fontFamily: "var(--font-mono)",
+                  transition: "all 0.2s ease",
+                  boxShadow: "0 4px 14px rgba(255, 184, 108, 0.2)",
+                }}
+              >
+                <span>🔗</span>
+                <span>ПЕРЕЙТИ НА ОФИЦИАЛЬНЫЙ САЙТ ({sourceName}) ↗</span>
+              </a>
+
+              <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>
+                Прямая ссылка на официальный реестр ведомства
+              </span>
+            </div>
+          </div>
+
+          {/* Raw Provenance Payload */}
+          <div style={{ background: "rgba(0,0,0,0.3)", borderRadius: "6px", padding: "14px", border: "1px solid var(--border-primary)" }}>
+            <div style={{ fontSize: "11px", color: "var(--text-muted)", marginBottom: "8px" }}>ТЕХНИЧЕСКИЙ ПАСПОРТ ЗАДАЧИ:</div>
+            <pre style={{ margin: 0, color: "var(--text-primary)", overflowX: "auto", fontSize: "11px" }}>
+              {JSON.stringify(jobData, null, 2)}
+            </pre>
+          </div>
+        </div>
+      );
+    }
+
+    // 2. Standard Verified or Local Enrichment Modes
+    return (
+      <div style={{ padding: "24px", fontFamily: "var(--font-mono)", fontSize: "13px" }}>
+        <div style={{ background: isVerified ? "rgba(0, 255, 204, 0.06)" : "rgba(0, 136, 255, 0.06)", border: `1px solid ${isVerified ? "var(--border-highlight)" : "#0088ff60"}`, borderRadius: "6px", padding: "18px", marginBottom: "20px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+            <div style={{ color: isVerified ? "var(--text-accent)" : "#0088ff", fontSize: "14px", fontWeight: "bold" }}>
+              {isVerified ? "🟢 ПОДТВЕРЖДЕННЫЙ ВНЕШНИЙ ИСТОЧНИК (LIVE_EXTERNAL_SOURCE)" : "🔵 ЛОКАЛЬНОЕ ОБОГАЩЕНИЕ (LOCAL_ENRICHMENT)"}
+            </div>
+            <span style={{ fontSize: "11px", padding: "2px 8px", borderRadius: "4px", background: isVerified ? "rgba(0,255,204,0.15)" : "rgba(0,136,255,0.15)", color: isVerified ? "#00ffcc" : "#0088ff", border: `1px solid ${isVerified ? "#00ffcc40" : "#0088ff40"}` }}>
+              verified={String(isVerified)} | {sourceType}
+            </span>
+          </div>
+          <p style={{ color: "var(--text-secondary)", fontSize: "11px", margin: "0 0 14px 0", lineHeight: "1.4" }}>
+            {isVerified
+              ? "Данные получены в реальном времени из внешнего API с подтвержденным источником и provenance."
+              : "Данные сформированы локальным парсером / детерминированным алгоритмом (DEF-коды, ссылки на профили, синтаксический анализ). verified=false."}
+          </p>
+          <pre style={{ background: "rgba(0,0,0,0.3)", padding: "12px", borderRadius: "4px", color: "var(--text-primary)", overflowX: "auto", fontSize: "12px" }}>
+            {JSON.stringify(jobData, null, 2)}
+          </pre>
+        </div>
+      </div>
+    );
   };
 
-  const handleDownloadJson = () => {
-    const jsonBlob = new Blob([
-      JSON.stringify(
-        {
-          platform: "MERAGLYM Open Intelligence Platform v2.5",
-          timestamp: new Date().toISOString(),
-          target: cleanInput,
-          telecom: { e164, national: nat, operator, prefix, region },
-          messengers: {
-            telegram: `https://t.me/+${cleanDigits}`,
-            whatsapp: `https://wa.me/${cleanDigits}`,
-          },
-          dorks: {
-            avito: `https://google.com/search?q="${e164}" OR "${nat}" avito`,
-            hh: `https://google.com/search?q="${e164}" OR "${nat}" site:hh.ru`,
-          },
-          confidence: "0.945",
-          stix_graph_nodes: 5,
-        },
-        null,
-        2
-      ),
-    ], { type: "application/json" });
-    const url = URL.createObjectURL(jsonBlob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `meraglym-dossier-${cleanDigits || "report"}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+  const handleCopy = () => {
+    navigator.clipboard.writeText(JSON.stringify(jobData, null, 2));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   return (
@@ -152,10 +231,8 @@ export function UnifiedDossierModal({
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
-          animation: "pulseGlow 5s infinite",
         }}
       >
-        {/* Modal Top Banner */}
         <div
           style={{
             padding: "20px 28px",
@@ -168,7 +245,7 @@ export function UnifiedDossierModal({
         >
           <div>
             <div style={{ fontSize: "11px", fontFamily: "var(--font-mono)", color: "var(--text-accent)", letterSpacing: "2px" }}>
-              ⚡ ЕДИНЫЙ ИТОГОВЫЙ ОТЧЕТ КОМПЛЕКСНОЙ РАЗВЕДКИ MERAGLYM
+              ⚡ ЕДИНЫЙ ИТОГОВЫЙ ОТЧЕТ КОМПЛЕКСНОЙ РАЗВЕДКИ MERAGLYM (REAL EXECUTION)
             </div>
             <h2 style={{ margin: "4px 0 0 0", color: "var(--text-primary)", fontSize: "20px", fontFamily: "var(--font-mono)" }}>
               🎯 Досье объекта: <span style={{ color: "#00ffcc" }}>{cleanInput}</span>
@@ -177,311 +254,16 @@ export function UnifiedDossierModal({
 
           <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
             <span style={{ fontSize: "11px", fontFamily: "var(--font-mono)", background: "rgba(0, 255, 204, 0.2)", color: "#00ffcc", border: "1px solid #00ffcc40", padding: "4px 10px", borderRadius: "4px" }}>
-              ✓ 100% ВЕКТОРОВ СКАНРИОВАНО
+              {isQueued ? "ПРОЦЕСС ВЫПОЛНЕНИЯ..." : "ВЫПОЛНЕНИЕ ЗАВЕРШЕНО"}
             </span>
-            <button
-              onClick={onClose}
-              style={{
-                background: "transparent",
-                border: "1px solid var(--border-primary)",
-                color: "var(--text-secondary)",
-                fontSize: "16px",
-                cursor: "pointer",
-                padding: "6px 12px",
-                borderRadius: "4px",
-              }}
-            >
-              ✕
-            </button>
+            <button onClick={onClose} style={{ background: "transparent", border: "1px solid var(--border-primary)", color: "var(--text-secondary)", fontSize: "16px", cursor: "pointer", padding: "6px 12px", borderRadius: "4px" }}>✕</button>
           </div>
         </div>
 
-        {/* Tab Navigation Bar */}
-        <div
-          style={{
-            display: "flex",
-            borderBottom: "1px solid var(--border-primary)",
-            background: "rgba(0, 10, 20, 0.6)",
-            padding: "0 28px",
-            gap: "4px",
-            overflowX: "auto",
-          }}
-        >
-          {[
-            { id: "summary", label: "📋 Сводное досье" },
-            { id: "telecom", label: "📱 1. Связь & Оператор" },
-            { id: "messengers", label: "💬 2. Мессенджеры" },
-            { id: "dorks", label: "🔍 3. Цифровые следы" },
-            { id: "registries", label: "🏛️ 4. Госреестры РФ" },
-            { id: "stix", label: "🛡️ 5. Граф STIX 2.1" },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
-              style={{
-                padding: "12px 16px",
-                background: activeTab === tab.id ? "rgba(0, 255, 204, 0.15)" : "transparent",
-                border: "none",
-                borderBottom: activeTab === tab.id ? "2px solid #00ffcc" : "2px solid transparent",
-                color: activeTab === tab.id ? "var(--text-accent)" : "var(--text-secondary)",
-                fontFamily: "var(--font-mono)",
-                fontSize: "12px",
-                fontWeight: activeTab === tab.id ? "bold" : "normal",
-                cursor: "pointer",
-                whiteSpace: "nowrap",
-                transition: "all 0.2s",
-              }}
-            >
-              {tab.label}
-            </button>
-          ))}
+        <div style={{ overflowY: "auto", flex: 1 }}>
+          {renderContent()}
         </div>
 
-        {/* Modal Main Content Area */}
-        <div style={{ padding: "24px 28px", overflowY: "auto", flex: 1, fontFamily: "var(--font-mono)", fontSize: "13px" }}>
-          {activeTab === "summary" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-              {/* Executive Summary Card */}
-              <div style={{ background: "rgba(0, 255, 204, 0.04)", border: "1px solid var(--border-highlight)", borderRadius: "6px", padding: "18px" }}>
-                <div style={{ color: "var(--text-accent)", fontSize: "14px", fontWeight: "bold", marginBottom: "10px" }}>
-                  🧠 ИИ-ЗАКЛЮЧЕНИЕ АНАЛИТИКА MERAGLYM:
-                </div>
-                <div style={{ color: "var(--text-primary)", lineHeight: 1.6, fontSize: "13px" }}>
-                  Объект <b>{cleanInput}</b> успешно просканирован одновременно по 21 адаптеру разведки. 
-                  {isPhone && (
-                    <span>
-                      {" "}Номер зарегистрирован в мобильной сети <b>{operator}</b> ({region}). Активен в Telegram и WhatsApp. Найдены потенциальные цифровые следы в архивах объявлений.
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* Grid Summary Overview */}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "16px" }}>
-                <div style={{ background: "rgba(255, 255, 255, 0.02)", border: "1px solid var(--border-primary)", borderRadius: "6px", padding: "14px" }}>
-                  <div style={{ color: "var(--text-secondary)", fontSize: "11px", marginBottom: "6px" }}>📱 ТЕЛЕКОМ И СВЯЗЬ</div>
-                  <div style={{ color: "var(--text-primary)", fontSize: "13px", fontWeight: "bold" }}>{isPhone ? operator : "Просканировано"}</div>
-                  <div style={{ color: "var(--text-muted)", fontSize: "11px", marginTop: "4px" }}>{isPhone ? region : "Нет нарушений"}</div>
-                </div>
-
-                <div style={{ background: "rgba(255, 255, 255, 0.02)", border: "1px solid var(--border-primary)", borderRadius: "6px", padding: "14px" }}>
-                  <div style={{ color: "var(--text-secondary)", fontSize: "11px", marginBottom: "6px" }}>💬 МЕССЕНДЖЕРЫ</div>
-                  <div style={{ color: "#00ffcc", fontSize: "13px", fontWeight: "bold" }}>Telegram & WhatsApp</div>
-                  <div style={{ color: "var(--text-muted)", fontSize: "11px", marginTop: "4px" }}>Профили доступны по 1-клик ссылкам</div>
-                </div>
-
-                <div style={{ background: "rgba(255, 255, 255, 0.02)", border: "1px solid var(--border-primary)", borderRadius: "6px", padding: "14px" }}>
-                  <div style={{ color: "var(--text-secondary)", fontSize: "11px", marginBottom: "6px" }}>🏛️ РЕЕСТРЫ РФ</div>
-                  <div style={{ color: "var(--text-primary)", fontSize: "13px", fontWeight: "bold" }}>ЕГРЮЛ / ЕГРИП / ФССП</div>
-                  <div style={{ color: "var(--text-muted)", fontSize: "11px", marginTop: "4px" }}>Задолженностей не обнаружено</div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {activeTab === "telecom" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-              <div style={{ background: "rgba(255, 255, 255, 0.02)", border: "1px solid var(--border-primary)", borderRadius: "6px", padding: "18px" }}>
-                <h4 style={{ margin: "0 0 14px 0", color: "var(--text-accent)" }}>📱 Детализация телеком-адаптера (Phone Recon E.164)</h4>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px" }}>
-                  <div>Формат E.164: <b style={{ color: "#00ffcc" }}>{isPhone ? e164 : cleanInput}</b></div>
-                  <div>Национальный формат: <b>{isPhone ? nat : cleanInput}</b></div>
-                  <div>Оператор: <b style={{ color: "#00ffcc" }}>{operator}</b></div>
-                  <div>DEF-код: <b>{prefix}</b></div>
-                  <div>Регион привязки: <b>{region}</b></div>
-                  <div>Часовой пояс: <b>UTC+7 / MSK+4</b></div>
-                  <div>Тип линии: <b>Мобильный GSM / Сотовый</b></div>
-                  <div>MNP Реестр: <b style={{ color: "#00ffcc" }}>Подтвержден</b></div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {activeTab === "messengers" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-              <div style={{ color: "var(--text-secondary)", fontSize: "12px", marginBottom: "8px" }}>
-                Прямые протоколы деанонимизации и открытия профилей:
-              </div>
-
-              <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
-                <a
-                  href={`https://t.me/+${cleanDigits}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{
-                    padding: "12px 20px",
-                    background: "rgba(0, 136, 255, 0.2)",
-                    border: "1px solid #0088ff",
-                    color: "#ffffff",
-                    textDecoration: "none",
-                    borderRadius: "6px",
-                    fontWeight: "bold",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "8px",
-                  }}
-                >
-                  ✈️ Открыть профиль Telegram ↗
-                </a>
-
-                <a
-                  href={`https://wa.me/${cleanDigits}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{
-                    padding: "12px 20px",
-                    background: "rgba(37, 211, 102, 0.2)",
-                    border: "1px solid #25d366",
-                    color: "#ffffff",
-                    textDecoration: "none",
-                    borderRadius: "6px",
-                    fontWeight: "bold",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "8px",
-                  }}
-                >
-                  🟢 Открыть чат WhatsApp ↗
-                </a>
-
-                <a
-                  href={`viber://chat?number=%2B${cleanDigits}`}
-                  style={{
-                    padding: "12px 20px",
-                    background: "rgba(115, 96, 242, 0.2)",
-                    border: "1px solid #7360f2",
-                    color: "#ffffff",
-                    textDecoration: "none",
-                    borderRadius: "6px",
-                    fontWeight: "bold",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "8px",
-                  }}
-                >
-                  🟣 Вызов Viber ↗
-                </a>
-              </div>
-            </div>
-          )}
-
-          {activeTab === "dorks" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-              <div style={{ color: "var(--text-secondary)", fontSize: "12px" }}>
-                Автоматически сформированные поисковые дорки для извлечения объявлений, резюме и объявлений:
-              </div>
-
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "12px" }}>
-                <a
-                  href={`https://google.com/search?q="${e164}" OR "${nat}" site:avito.ru`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{
-                    padding: "12px",
-                    background: "rgba(255, 184, 108, 0.15)",
-                    border: "1px solid #ffb86c",
-                    color: "#ffb86c",
-                    textDecoration: "none",
-                    borderRadius: "6px",
-                  }}
-                >
-                  📦 Искать объявления на Авито ↗
-                </a>
-
-                <a
-                  href={`https://google.com/search?q="${e164}" OR "${nat}" site:hh.ru`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{
-                    padding: "12px",
-                    background: "rgba(255, 85, 85, 0.15)",
-                    border: "1px solid #ff5555",
-                    color: "#ff5555",
-                    textDecoration: "none",
-                    borderRadius: "6px",
-                  }}
-                >
-                  📄 Искать резюме на HeadHunter (hh.ru) ↗
-                </a>
-
-                <a
-                  href={`https://yandex.ru/search/?text="${nat}"`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{
-                    padding: "12px",
-                    background: "rgba(255, 255, 255, 0.08)",
-                    border: "1px solid var(--border-primary)",
-                    color: "var(--text-primary)",
-                    textDecoration: "none",
-                    borderRadius: "6px",
-                  }}
-                >
-                  🌐 Точный поиск в Яндексе ↗
-                </a>
-
-                <a
-                  href={`https://google.com/search?q="${e164}" site:vk.com`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{
-                    padding: "12px",
-                    background: "rgba(0, 136, 255, 0.15)",
-                    border: "1px solid #0088ff",
-                    color: "#0088ff",
-                    textDecoration: "none",
-                    borderRadius: "6px",
-                  }}
-                >
-                  👥 Профиль VKontakte ↗
-                </a>
-              </div>
-            </div>
-          )}
-
-          {activeTab === "registries" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-              <div style={{ background: "rgba(255, 255, 255, 0.02)", border: "1px solid var(--border-primary)", borderRadius: "6px", padding: "18px" }}>
-                <h4 style={{ margin: "0 0 12px 0", color: "var(--text-accent)" }}>🏛️ Проверка по государственным базам данных РФ</h4>
-                <div style={{ display: "flex", flexDirection: "column", gap: "10px", fontSize: "12px" }}>
-                  <div>• <b>ЕГРЮЛ / ЕГРИП ФНС РФ:</b> <span style={{ color: "#00ffcc" }}>Активный запрос (egrul.nalog.ru)</span></div>
-                  <div>• <b>ФССП Россия (Банк данных взысканий):</b> <span style={{ color: "#00ffcc" }}>0 открытых производств</span></div>
-                  <div>• <b>СудРФ / ГАС Правосудие:</b> <span style={{ color: "var(--text-secondary)" }}>0 активных судебных дел</span></div>
-                  <div>• <b>МВД РФ (Розыск):</b> <span style={{ color: "#00ffcc" }}>Не значится в розыске</span></div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {activeTab === "stix" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-              <div style={{ background: "rgba(0, 10, 20, 0.8)", border: "1px solid var(--border-highlight)", borderRadius: "6px", padding: "18px" }}>
-                <h4 style={{ margin: "0 0 12px 0", color: "#00ffcc" }}>🛡️ Канонический Граф Сущностей STIX 2.1</h4>
-                <pre style={{ margin: 0, color: "var(--text-accent)", fontSize: "11px", overflowX: "auto", background: "rgba(0,0,0,0.3)", padding: "12px", borderRadius: "4px" }}>
-{`{
-  "type": "bundle",
-  "id": "bundle--meraglym-${cleanDigits || "target"}",
-  "objects": [
-    {
-      "type": "identity",
-      "id": "identity--${cleanDigits || "target"}",
-      "name": "Target: ${cleanInput}",
-      "identity_class": "${isPhone ? "individual" : "unknown"}"
-    },
-    {
-      "type": "phone-number",
-      "id": "phone-number--${cleanDigits}",
-      "value": "${e164}"
-    }
-  ]
-}`}
-                </pre>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Modal Bottom Actions */}
         <div
           style={{
             padding: "16px 28px",
@@ -506,23 +288,7 @@ export function UnifiedDossierModal({
                 cursor: "pointer",
               }}
             >
-              📋 {copied ? "СКОПИРОВАНО!" : "СКОПИРОВАТЬ ИТОГОВЫЙ ТЕКСТ"}
-            </button>
-
-            <button
-              onClick={handleDownloadJson}
-              style={{
-                padding: "8px 16px",
-                background: "rgba(0, 136, 255, 0.15)",
-                border: "1px solid #0088ff",
-                color: "#ffffff",
-                fontFamily: "var(--font-mono)",
-                fontSize: "12px",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
-            >
-              📥 СКАЧАТЬ ОТЧЕТ (JSON)
+              📋 {copied ? "СКОПИРОВАНО!" : "СКОПИРОВАТЬ РЕЗУЛЬТАТ (JSON)"}
             </button>
           </div>
 

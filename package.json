@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "npm --prefix MERAGLYM-main run dev",
-    "build": "npm --prefix MERAGLYM-main run build && node -e \"const fs=require('fs'); fs.cpSync('MERAGLYM-main/out', 'static', { recursive: true, force: true });\"",
+    "build": "npm --prefix MERAGLYM-main run build && node -e \"const fs=require('fs'); fs.rmSync('static', { recursive: true, force: true }); fs.cpSync('MERAGLYM-main/out', 'static', { recursive: true, force: true }); fs.cpSync('MERAGLYM-main/functions', 'functions', { recursive: true, force: true });\"",
     "start": "npm --prefix MERAGLYM-main run start",
     "typecheck": "npm --prefix MERAGLYM-main run typecheck",
     "test": "npm --prefix MERAGLYM-main run test"

@@ -20,27 +20,17 @@ function generateId(prefix: string) {
 export default function AgentChatPanel() {
   const { t, locale, isRussian } = useI18n();
 
-  const getInitialMessage = (): ChatMessage => ({
-    id: "welcome-init",
-    sender: "agent",
-    text: t("agentChat.welcome"),
-    timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-  });
-
-  const [messages, setMessages] = useState<ChatMessage[]>([getInitialMessage()]);
+  const [messages, setMessages] = useState<ChatMessage[]>([
+    {
+      id: "welcome-init",
+      sender: "agent",
+      text: "",
+      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+    },
+  ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  // Update initial welcome message if user switches language and no conversation has occurred yet
-  useEffect(() => {
-    setMessages((prev) => {
-      if (prev.length === 1 && prev[0].id === "welcome-init") {
-        return [getInitialMessage()];
-      }
-      return prev;
-    });
-  }, [locale]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -126,7 +116,14 @@ export default function AgentChatPanel() {
   };
 
   const handleClearChat = () => {
-    setMessages([getInitialMessage()]);
+    setMessages([
+      {
+        id: "welcome-init",
+        sender: "agent",
+        text: "",
+        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      },
+    ]);
   };
 
   const handleExportChat = () => {
@@ -257,7 +254,7 @@ export default function AgentChatPanel() {
                 boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
               }}
             >
-              {msg.text}
+              {msg.id === "welcome-init" ? t("agentChat.welcome") : msg.text}
 
               {msg.sources && msg.sources.length > 0 && (
                 <div style={{ marginTop: "12px", paddingTop: "8px", borderTop: "1px dashed var(--border-primary)", fontSize: "11px", fontFamily: "var(--font-mono)" }}>
@@ -406,13 +403,13 @@ function generateClientSideOSINTResponse(
 
     if (lower.includes("stix") || lower.includes("opencti") || lower.includes("корреляц") || lower.includes("граф")) {
       return {
-        answer: `🛡️ **Граф киберразведки и модель STIX 2.1 в MERAGLYM:**\n\n• Платформа автоматически нормализует разрозненные наблюдения (Observations) от всех 19 адаптеров в единый граф сущностей (Entity Graph).\n• Модуль **Entity Resolution** устраняет дубликаты и склеивает псевдонимы (например, никнейм, email и телефон одного субъекта).\n• Модуль **STIX 2.1 Ingest** поддерживает стандартизированные объекты: threat-actor, indicator, malware, identity для бесшовного экспорта в OpenCTI и SIEM.`,
+        answer: `🛡️ **Граф киберразведки и модель STIX 2.1 в MERAGLYM:**\n\n• Платформа автоматически нормализует разрозненные наблюдения (Observations) от всех подключенных адаптеров в единый граф сущностей (Entity Graph).\n• Модуль **Entity Resolution** устраняет дубликаты и склеивает псевдонимы (например, никнейм, email и телефон одного субъекта).\n• Модуль **STIX 2.1 Ingest** поддерживает стандартизированные объекты: threat-actor, indicator, malware, identity для бесшовного экспорта в OpenCTI и SIEM.`,
         sources: [{ id: 402, name: "STIX 2.1 & OpenCTI Connector", url: "https://www.opencti.io" }],
       };
     }
 
     return {
-      answer: `Запрос «*${prompt}*» проанализирован ядром разведки MERAGLYM.\n\nВ базе проиндексировано 1300+ OSINT ресурсов и 19 активных адаптеров (ЕГРЮЛ, ФНС, ГИР БО, ГАС Правосудие, КАД Арбитраж, ФССП, ЕФРСБ, МВД Розыск, Holehe, GHunt, Maigret, PhoneInfoga, GeoWiFi, CCTVScan, TorBot, STIX 2.1, OpenCTI).\n\nВоспользуйтесь панелью поиска или задайте уточняющий вопрос.`,
+      answer: `Запрос «*${prompt}*» проанализирован ядром разведки MERAGLYM.\n\nВ базе проиндексировано 1300+ OSINT ресурсов и подключены активные адаптеры (ЕГРЮЛ, ФНС, ГИР БО, ГАС Правосудие, КАД Арбитраж, ФССП, ЕФРСБ, МВД Розыск, Holehe, GHunt, Maigret, PhoneInfoga, GeoWiFi, CCTVScan, TorBot, STIX 2.1, OpenCTI).\n\nВоспользуйтесь панелью поиска или задайте уточняющий вопрос.`,
       sources: [
         { id: 101, name: "ЕГРЮЛ / ФНС", url: "https://egrul.nalog.ru" },
         { id: 201, name: "Holehe OSINT", url: "https://github.com/megadose/holehe" },
@@ -447,7 +444,7 @@ function generateClientSideOSINTResponse(
     }
 
     return {
-      answer: `Processed query "*${prompt}*". MERAGLYM Intelligence Engine indexed 1300+ OSINT resources and 19 active adapters. Use the Search Panel or trigger automated worker pipelines in the Jobs Panel.`,
+      answer: `Processed query "*${prompt}*". MERAGLYM Intelligence Engine indexed 1300+ OSINT resources and active adapters. Use the Search Panel or trigger automated worker pipelines in the Jobs Panel.`,
       sources: [{ id: 402, name: "STIX 2.1 & OpenCTI Connector", url: "https://www.opencti.io" }],
     };
   }

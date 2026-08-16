@@ -803,7 +803,7 @@ export default function Sidebar({ initialNodes, onSelectNode, selectedNodeId }: 
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
           <h2 style={{ color: "var(--text-accent)", fontSize: "14px", margin: 0 }}>
-            {t("sidebar.sysIndex")}
+            {t("sidebar.rootCategories")}
           </h2>
           <div style={{ fontSize: "11px", color: "var(--text-secondary)", fontFamily: "var(--font-mono)" }}>
             {filteredNodes.length} {t("sidebar.entries")}

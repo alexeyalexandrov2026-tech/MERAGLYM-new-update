@@ -232,102 +232,6 @@ async function executeSearch(rawQuery: string, _category: string | null, _env?: 
 
   const qLower = query.toLowerCase();
 
-  // Dynamic Synthesis for Direct Search Queries (Phone, INN, Email, Person, Crypto)
-  const syntheticResults: NodeRecord[] = [];
-
-  const isPhone = /^(\+?\d{1,4}[-.\s]?)?(\(?\d{3}\)?[-.\s]?)?\d{3}[-.\s]?\d{2}[-.\s]?\d{2}$/.test(query.replace(/\s+/g, "")) || (query.length >= 7 && /^\+?\d+$/.test(query.replace(/[\s()-]/g, "")));
-  const isInn = /^\d{10}$|^\d{12}$/.test(query.trim());
-  const isEmail = query.includes("@") && query.includes(".");
-  const isCrypto = (query.startsWith("1") || query.startsWith("3") || query.startsWith("bc1") || query.startsWith("0x")) && query.length > 24;
-
-  if (isPhone) {
-    syntheticResults.push({
-      id: 9901,
-      parentId: 300,
-      name: `📱 PhoneInfoga OSINT Разведка Телефона: ${query}`,
-      type: "phone_recon",
-      url: "#launch-tool",
-      description: `Анализ номера ${query}: Валидация формата E.164, определение оператора связи (МТС/Мегафон/Билайн/T-Mobile), MNP-перенос, мессенджеры Telegram/WhatsApp и утекшие объявления.`,
-      status: "Active",
-      pricing: "Free / In-Project Tool",
-      bestFor: `Разведка владельца номера ${query}`,
-      input: query,
-      output: "Оператор, регион, Telegram ID, WhatsApp статус, Avito",
-      opsec: "Low",
-      localInstall: true,
-    });
-
-    syntheticResults.push({
-      id: 9905,
-      parentId: 300,
-      name: `👤 Идентификатор Владельца Номера (Reverse Phone Lookup): ${query}`,
-      type: "phone_person_correlator",
-      url: "#launch-tool",
-      description: `Высокотехнологичный модуль корреляции ФИО и личности по номеру ${query}: Запросы в ЕГРИП/Госзакупки, извлечение профиля VCard Telegram/WhatsApp и дорки Авито/HH.ru.`,
-      status: "Active",
-      pricing: "Free / In-Project High-Tech Module",
-      bestFor: `Установление ФИО, псевдонима и бизнеса по номеру ${query}`,
-      input: query,
-      output: "ФИО владельца, ИП/ООО связка, Telegram VCard, Dorking findings",
-      opsec: "High",
-      localInstall: true,
-    });
-  }
-
-  if (isInn || qLower.includes("сбер") || qLower.includes("яндекс") || qLower.includes("газпром") || qLower.includes("ооо") || qLower.includes("пао")) {
-    syntheticResults.push({
-      id: 9902,
-      parentId: 100,
-      name: `🏢 ЕГРЮЛ / ФНС / ГИР БО Разведка Компании (${query})`,
-      type: "company_recon",
-      url: "https://egrul.nalog.ru",
-      description: `Комплексная выписка ЕГРЮЛ ФНС РФ по цели «${query}»: Проверка учредителей, генерального директора, финансовых отчетов БО Налог, арбитражных споров КАД и приставов ФССП.`,
-      status: "Active",
-      pricing: "Free / Official Registry",
-      bestFor: `Глубокая корпоративная проверка по цели ${query}`,
-      input: query,
-      output: "Выписка ЕГРЮЛ, Бухгалтерский баланс, Судебные иски",
-      opsec: "Low",
-      api: true,
-    });
-  }
-
-  if (isEmail) {
-    syntheticResults.push({
-      id: 9903,
-      parentId: 200,
-      name: `✉️ Holehe & GHunt OSINT Разведка Почты: ${query}`,
-      type: "email_recon",
-      url: "#launch-tool",
-      description: `Пассивная проверка email адреса ${query} по 120+ веб-сервисам (Holehe) и извлечение Google Gaia ID, аватаров и отзывов Google Maps (GHunt).`,
-      status: "Active",
-      pricing: "Free / In-Project Tool",
-      bestFor: `Разведка профилей и аккаунтов по ${query}`,
-      input: query,
-      output: "Зарегистрированные сервисы, Google ID, Breaches",
-      opsec: "High",
-      localInstall: true,
-    });
-  }
-
-  if (isCrypto) {
-    syntheticResults.push({
-      id: 9904,
-      parentId: 600,
-      name: `💰 Legendary Crypto Трейсинг Кошелька: ${query}`,
-      type: "crypto_recon",
-      url: "#launch-tool",
-      description: `Расследование криптовалютных транзакций кошелька ${query}: Кластеризация входов, выявление биржевых депозитов (Binance/Garantex/OKX) и отслеживание смарт-контрактов.`,
-      status: "Active",
-      pricing: "Free / In-Project Tool",
-      bestFor: `Анализ движений средств кошелька ${query}`,
-      input: query,
-      output: "Баланс, Граф транзакций, Exchange Deposit",
-      opsec: "Low",
-      api: true,
-    });
-  }
-
   // Filter catalog items
   const catalogMatches = STATIC_SEARCH_CATALOG.filter((item) => {
     return (
@@ -338,27 +242,7 @@ async function executeSearch(rawQuery: string, _category: string | null, _env?: 
     );
   });
 
-  const combined = [...syntheticResults, ...catalogMatches];
-
-  if (combined.length === 0) {
-    combined.push({
-      id: 9999,
-      parentId: 100,
-      name: `🔍 Исполнительный Модуль Разведки MERAGLYM по запросу «${query}»`,
-      type: "universal_recon",
-      url: "#launch-tool",
-      description: `Полномасштабный поиск и нормализация сущностей по запросу «${query}» в 19 базах данных и граф STIX 2.1.`,
-      status: "Active",
-      pricing: "Free / In-Project Tool",
-      bestFor: `Запуск разведки по запросу ${query}`,
-      input: query,
-      output: "Граф сущностей STIX, результаты 19 адаптеров",
-      opsec: "High",
-      localInstall: true,
-    });
-  }
-
-  return Response.json(combined);
+  return Response.json(catalogMatches);
 }
 
 export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
