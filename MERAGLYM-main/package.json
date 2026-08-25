@@ -12,7 +12,8 @@
     "db:validate": "prisma validate",
     "db:migrate": "prisma migrate deploy",
     "db:seed": "prisma db seed",
-    "test": "npm run typecheck && npm run lint"
+    "test:unit": "node --test --experimental-strip-types tests/adapterRouting.test.ts tests/deployedAdapterContract.test.ts",
+    "test": "npm run typecheck && npm run lint && npm run test:unit"
   },
   "engines": {
     "node": ">=22.12.0"

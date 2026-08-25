@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import type { Node } from "@prisma/client";
 import { useI18n } from "@/lib/i18nContext";
+import { resolveAdapterRoute, MAX_POLL_ATTEMPTS, POLL_INTERVAL_MS } from "@/lib/adapterRouting";
 import { UnifiedDossierModal } from "./UnifiedDossierModal";
 
 export default function SearchPanel() {
@@ -250,22 +251,42 @@ export default function SearchPanel() {
 
   const handleExecuteJob = async () => {
     if (!targetInput.trim()) return;
-    setIsExecuting(true);
-    setExecutionResult(null);
 
     const now = new Date().toISOString();
     const cleanInput = targetInput.trim();
-    const isPhone = cleanInput.startsWith("+7") || cleanInput.startsWith("8") || (cleanInput.length >= 10 && /^\+?\d+$/.test(cleanInput.replace(/[\s()-]/g, "")));
-    const adapterName = isPhone ? "phone_person_correlator" : ((activeNode?.type && activeNode.type !== "folder" && activeNode.type !== "url") ? activeNode.type : (activeNode?.name || "universal_recon"));
+    const routing = resolveAdapterRoute(cleanInput, activeNode);
+
+    // No deployed adapter handles this target. Report it instead of queueing a
+    // job the consumer would only reject with ADAPTER_NOT_FOUND.
+    if (routing.adapterId === null) {
+      setExecutionResult({
+        status: "FAILED",
+        adapter: null,
+        target: cleanInput,
+        timestamp: now,
+        confidence: "UNVERIFIED",
+        data: {
+          error: {
+            code: "NO_MATCHING_ADAPTER",
+            message: isRussian
+              ? `Для объекта «${cleanInput}» нет автоматического адаптера. Укажите телефон, ИНН/ОГРН, email, криптокошелёк или ФИО — либо запустите разведку с карточки конкретного инструмента.`
+              : `No automated adapter matches "${cleanInput}". Provide a phone, INN/OGRN, email, crypto wallet or full name — or launch from a specific tool node.`,
+          },
+        },
+      });
+      setShowUnifiedDossier(true);
+      return;
+    }
+
+    const adapterName = routing.adapterId;
+    setIsExecuting(true);
+    setExecutionResult(null);
 
     try {
       const res = await fetch("/api/jobs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type: adapterName,
-          payload: { target: cleanInput, phone: cleanInput, inn: cleanInput, email: cleanInput },
-        }),
+        body: JSON.stringify({ type: adapterName, payload: routing.payload }),
       });
 
       if (res.ok) {
@@ -276,9 +297,13 @@ export default function SearchPanel() {
           error?: any;
         };
 
-        // Polling loop
-        while (job.status === "QUEUED" || job.status === "RUNNING") {
-          await new Promise((resolve) => setTimeout(resolve, 2000));
+        // The consumer picks the job up off the queue after ~5-6s, so poll —
+        // but bounded, so a stalled job surfaces as an error instead of an
+        // indefinite "queued" spinner.
+        let attempts = 0;
+        while ((job.status === "QUEUED" || job.status === "RUNNING") && attempts < MAX_POLL_ATTEMPTS) {
+          attempts++;
+          await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
           try {
             const pollRes = await fetch(`/api/jobs/${job.id}`);
             if (pollRes.ok) {
@@ -291,6 +316,19 @@ export default function SearchPanel() {
           }
         }
 
+        if (job.status === "QUEUED" || job.status === "RUNNING") {
+          job = {
+            ...job,
+            status: "TIMEOUT",
+            error: {
+              code: "POLL_TIMEOUT",
+              message: isRussian
+                ? `Воркер не вернул результат за ${(MAX_POLL_ATTEMPTS * POLL_INTERVAL_MS) / 1000} с. Задача ${job.id} осталась в очереди.`
+                : `Worker returned no result within ${(MAX_POLL_ATTEMPTS * POLL_INTERVAL_MS) / 1000}s. Job ${job.id} is still queued.`,
+            },
+          };
+        }
+
         const isVerified = job.result?.verified === true;
         setExecutionResult({
           status: job.status || "FAILED",
@@ -298,7 +336,9 @@ export default function SearchPanel() {
           target: cleanInput,
           timestamp: now,
           confidence: isVerified ? "VERIFIED" : "LOCAL_ENRICHMENT",
-          data: job.result || job.error || { message: "Job finished", status: job.status },
+          // Always nest a failure under `error` so the dossier can render it
+          // uniformly, whatever produced it.
+          data: job.result || (job.error ? { error: job.error } : { message: "Job finished", status: job.status }),
         });
       } else {
         setExecutionResult({
@@ -308,7 +348,7 @@ export default function SearchPanel() {
           timestamp: now,
           confidence: "UNVERIFIED",
           data: {
-            error: `HTTP ${res.status}: Backend service unavailable`,
+            error: { code: "HTTP_ERROR", message: `HTTP ${res.status}: Backend service unavailable` },
           },
         });
       }
@@ -320,7 +360,7 @@ export default function SearchPanel() {
         timestamp: now,
         confidence: "UNVERIFIED",
         data: {
-          error: err instanceof Error ? err.message : "Network error",
+          error: { code: "NETWORK_ERROR", message: err instanceof Error ? err.message : "Network error" },
         },
       });
     } finally {
