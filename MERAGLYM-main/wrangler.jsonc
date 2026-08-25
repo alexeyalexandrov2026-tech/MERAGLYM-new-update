@@ -15,5 +15,13 @@
   ],
   "ai": {
     "binding": "AI"
+  },
+  "queues": {
+    "producers": [
+      {
+        "binding": "MERAGLYM_QUEUE",
+        "queue": "meraglym-jobs"
+      }
+    ]
   }
 }

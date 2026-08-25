@@ -1,15 +1,12 @@
 /**
  * MERAGLYM Production Job Lifecycle Engine
  * Handles:
- * - POST /api/jobs (Create job & execute synchronously against the adapter registry)
+ * - POST /api/jobs (Create job & trigger execution)
  * - GET  /api/jobs (List jobs)
  * - GET  /api/jobs/:id (Get job details)
  * - POST /api/jobs/:id/cancel (Cancel job)
- * - POST /api/jobs/:id/retry (Re-run job synchronously)
+ * - POST /api/jobs/:id/retry (Retry job)
  */
-
-import { AdapterRegistry } from "../../../src/lib/adapters/registry";
-import type { AdapterResult, ExecutionContext } from "../../../src/lib/adapters/types";
 
 interface Env {
   DB?: D1Database;
@@ -18,120 +15,23 @@ interface Env {
   OPENCTI_URL?: string;
   OPENCTI_TOKEN?: string;
   SPIDERFOOT_SERVER_URL?: string;
-  DADATA_API_KEY?: string;
-  NUMVERIFY_API_KEY?: string;
+  MERAGLYM_QUEUE?: Queue;
 }
 
 interface JobRecord {
   id: string;
   type: string;
-  status: "COMPLETED" | "FAILED" | "CANCELLED";
+  status: "PENDING" | "QUEUED" | "RUNNING" | "COMPLETED" | "FAILED" | "TIMEOUT" | "CANCELLED" | "RETRYING";
   payload: Record<string, unknown>;
   result: Record<string, unknown> | null;
-  error: Record<string, unknown> | string | null;
-  retryCount: number;
-  maxRetries: number;
+  error: string | null;
+  attempt: number;
+  maxAttempts: number;
   startedAt: string | null;
   completedAt: string | null;
   createdAt: string;
   updatedAt: string;
-}
-
-// Cloudflare Pages Functions run on the Workers runtime with a hard wall-clock
-// budget per request. There is no background queue consumer in this project
-// (Pages Functions cannot run a queue() handler), so every job is executed
-// synchronously, in-request, against the local adapter registry below this
-// timeout guard.
-const EXECUTION_TIMEOUT_MS = 25000;
-
-/** Fallback result for job types with no registered adapter (most catalog
- * entries are manual/external tools that cannot run on the edge). Surfaces
- * as an EXTERNAL_REFERENCE card instead of hanging or erroring. */
-function buildExternalReferenceResult(type: string, payload: Record<string, unknown>): AdapterResult {
-  const started = new Date().toISOString();
-  const query = String(payload.target || payload.phone || payload.inn || payload.email || payload.address || "");
-  const sourceUrl = typeof payload.sourceUrl === "string" && payload.sourceUrl.startsWith("http") ? payload.sourceUrl : undefined;
-  const sourceName = typeof payload.sourceName === "string" && payload.sourceName ? payload.sourceName : type;
-
-  return {
-    success: true,
-    adapter: type,
-    adapterVersion: "1.0.0",
-    startedAt: started,
-    completedAt: new Date().toISOString(),
-    verified: false,
-    confidence: sourceUrl ? 0.6 : 0.3,
-    data: {
-      target: query,
-      mode: "EXTERNAL_REFERENCE",
-      sourceName,
-      sourceUrl: sourceUrl || null,
-      portalTitle: sourceUrl
-        ? `Инструмент «${sourceName}» не имеет автоматического серверного адаптера — откройте источник вручную.`
-        : `Для типа задачи «${type}» нет зарегистрированного адаптера и внешней ссылки.`,
-      instructions: sourceUrl
-        ? ["1. Нажмите на ссылку официального источника ниже.", `2. Введите параметры объекта: «${query}».`]
-        : [],
-    },
-    observations: [],
-    entities: query ? [{ type: "person", value: query, confidence: 0.3 }] : [],
-    relationships: [],
-    source: [
-      {
-        sourceId: "src_no_adapter_fallback",
-        sourceType: "EXTERNAL_REFERENCE",
-        sourceName,
-        sourceUrl,
-        url: sourceUrl,
-        adapter: type,
-        adapterVersion: "1.0.0",
-        retrievedAt: started,
-        requestId: "n/a",
-        verified: false,
-      },
-    ],
-  };
-}
-
-async function executeJobNow(
-  type: string,
-  payload: Record<string, unknown>,
-  env: Env
-): Promise<{ status: "COMPLETED" | "FAILED"; result: AdapterResult | null; error: Record<string, unknown> | null }> {
-  const adapter = AdapterRegistry.get(type);
-  const ctx: ExecutionContext = {
-    requestId: `req_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-    env: env as unknown as Record<string, unknown>,
-  };
-
-  if (!adapter) {
-    return { status: "COMPLETED", result: buildExternalReferenceResult(type, payload), error: null };
-  }
-
-  try {
-    await adapter.validate(payload as never);
-  } catch (err) {
-    return {
-      status: "FAILED",
-      result: null,
-      error: { code: "VALIDATION_ERROR", message: err instanceof Error ? err.message : "Invalid input for adapter" },
-    };
-  }
-
-  try {
-    const timeout = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error("ADAPTER_TIMEOUT")), EXECUTION_TIMEOUT_MS)
-    );
-    const result = await Promise.race([adapter.execute(payload as never, ctx), timeout]);
-    return { status: "COMPLETED", result, error: null };
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Adapter execution failed";
-    return {
-      status: "FAILED",
-      result: null,
-      error: { code: message === "ADAPTER_TIMEOUT" ? "TIMEOUT" : "EXECUTION_ERROR", message },
-    };
-  }
+  idempotencyKey?: string | null;
 }
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
@@ -179,8 +79,8 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
             payload: typeof row.payload === "string" ? JSON.parse(row.payload) : (row.payload as Record<string, unknown>) || {},
             result: typeof row.result === "string" ? JSON.parse(row.result) : (row.result as Record<string, unknown>) || null,
             error: (row.error as string) || null,
-            retryCount: Number(row.retryCount || 0),
-            maxRetries: Number(row.maxRetries || 3),
+            attempt: Number(row.attempt || 1),
+            maxAttempts: Number(row.maxAttempts || 3),
             startedAt: (row.startedAt as string) || null,
             completedAt: (row.completedAt as string) || null,
             createdAt: (row.createdAt as string) || new Date().toISOString(),
@@ -201,7 +101,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   const url = new URL(request.url);
   const pathParts = url.pathname.split("/").filter(Boolean);
 
-  // Sub-actions: /api/jobs/:id/cancel or /api/jobs/:id/retry
+  // Check for sub-actions: /api/jobs/:id/cancel or /api/jobs/:id/retry
   if (pathParts.length >= 4 && pathParts[1] === "jobs") {
     const targetJobId = pathParts[2];
     const action = pathParts[3];
@@ -223,30 +123,19 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       }
 
       if (action === "retry") {
-        const retryCount = Number(row.retryCount || 0);
-        const maxRetries = Number(row.maxRetries || 3);
-        if (retryCount >= maxRetries) {
-          return Response.json({ error: { code: "MAX_ATTEMPTS_REACHED", message: `Job ${targetJobId} reached max retries (${maxRetries})` } }, { status: 400 });
+        const attempt = Number(row.attempt || 1);
+        const maxAttempts = Number(row.maxAttempts || 3);
+        if (attempt >= maxAttempts) {
+          return Response.json({ error: { code: "MAX_ATTEMPTS_REACHED", message: `Job ${targetJobId} reached max attempts (${maxAttempts})` } }, { status: 400 });
+        }
+        await env.DB.prepare("UPDATE Job SET status = 'QUEUED', attempt = attempt + 1, error = null, updatedAt = ? WHERE id = ?")
+          .bind(new Date().toISOString(), targetJobId).run();
+        
+        if (env.MERAGLYM_QUEUE) {
+          await env.MERAGLYM_QUEUE.send({ jobId: targetJobId, type: row.type });
         }
 
-        const payload = typeof row.payload === "string" ? JSON.parse(row.payload) : (row.payload as Record<string, unknown>) || {};
-        const now = new Date().toISOString();
-        const outcome = await executeJobNow(String(row.type), payload, env);
-        const finishedAt = new Date().toISOString();
-
-        await env.DB.prepare(
-          `UPDATE Job SET status = ?, result = ?, error = ?, retryCount = retryCount + 1, startedAt = ?, completedAt = ?, updatedAt = ? WHERE id = ?`
-        ).bind(
-          outcome.status,
-          outcome.result ? JSON.stringify(outcome.result) : null,
-          outcome.error ? JSON.stringify(outcome.error) : null,
-          now,
-          finishedAt,
-          finishedAt,
-          targetJobId
-        ).run();
-
-        return Response.json({ status: "ok", message: `Job ${targetJobId} re-executed (attempt ${retryCount + 2})`, jobStatus: outcome.status });
+        return Response.json({ status: "ok", message: `Job ${targetJobId} queued for retry (attempt ${attempt + 1})` });
       }
     } catch (err) {
       console.error("Action error", err);
@@ -254,8 +143,25 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     }
   }
 
+  // Idempotency check via DB
+  const idempotencyKey = request.headers.get("Idempotency-Key");
+  if (idempotencyKey && env?.DB) {
+    try {
+      const row = await env.DB.prepare("SELECT * FROM Job WHERE idempotencyKey = ?").bind(idempotencyKey).first();
+      if (row) {
+        return Response.json({
+          ...row,
+          payload: typeof row.payload === "string" ? JSON.parse(row.payload) : row.payload,
+          result: typeof row.result === "string" ? JSON.parse(row.result) : row.result,
+        }, { status: 200 });
+      }
+    } catch (err) {
+      console.warn("Idempotency query failed:", err);
+    }
+  }
+
   // Parse request body
-  let body: { type?: string; payload?: Record<string, unknown> };
+  let body: { type?: string; payload?: Record<string, unknown>; timeoutMs?: number };
   try {
     body = await request.json();
   } catch {
@@ -266,51 +172,52 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     return Response.json({ error: { code: "VALIDATION_ERROR", message: "Job 'type' is required (string)" } }, { status: 400 });
   }
 
-  if (!env?.DB) {
-    return Response.json({ error: { code: "DB_UNAVAILABLE", message: "D1 database is not bound in this environment" } }, { status: 503 });
-  }
-
-  const payload = body.payload || {};
-  const startedAt = new Date().toISOString();
-  const outcome = await executeJobNow(body.type, payload, env);
-  const finishedAt = new Date().toISOString();
+  const newJobId = `job_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  const now = new Date().toISOString();
 
   const newJob: JobRecord = {
-    id: `job_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+    id: newJobId,
     type: body.type,
-    status: outcome.status,
-    payload,
-    result: (outcome.result as unknown as Record<string, unknown>) || null,
-    error: outcome.error,
-    retryCount: 0,
-    maxRetries: 3,
-    startedAt,
-    completedAt: finishedAt,
-    createdAt: startedAt,
-    updatedAt: finishedAt,
+    status: "QUEUED",
+    payload: body.payload || {},
+    result: null,
+    error: null,
+    attempt: 1,
+    maxAttempts: 3,
+    startedAt: null,
+    completedAt: null,
+    createdAt: now,
+    updatedAt: now,
+    idempotencyKey: idempotencyKey || null,
   };
 
-  try {
-    await env.DB.prepare(
-      "INSERT INTO Job (id, type, status, payload, result, error, createdAt, updatedAt, startedAt, completedAt, retryCount, maxRetries) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-    ).bind(
-      newJob.id,
-      newJob.type,
-      newJob.status,
-      JSON.stringify(newJob.payload),
-      newJob.result ? JSON.stringify(newJob.result) : null,
-      newJob.error ? JSON.stringify(newJob.error) : null,
-      newJob.createdAt,
-      newJob.updatedAt,
-      newJob.startedAt,
-      newJob.completedAt,
-      newJob.retryCount,
-      newJob.maxRetries
-    ).run();
-  } catch (err) {
-    console.error("Failed to persist executed job to D1:", err);
-    return Response.json({ error: { code: "INTERNAL_ERROR", message: "Job executed but failed to persist result" } }, { status: 500 });
+  // Persist to D1 if available
+  if (env?.DB) {
+    try {
+      await env.DB.prepare(
+        "INSERT INTO Job (id, type, status, payload, result, error, createdAt, updatedAt, startedAt, completedAt, idempotencyKey) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      ).bind(
+        newJob.id,
+        newJob.type,
+        newJob.status,
+        JSON.stringify(newJob.payload),
+        newJob.result ? JSON.stringify(newJob.result) : null,
+        newJob.error,
+        newJob.createdAt,
+        newJob.updatedAt,
+        newJob.startedAt,
+        newJob.completedAt,
+        newJob.idempotencyKey
+      ).run();
+
+      if (env.MERAGLYM_QUEUE) {
+        await env.MERAGLYM_QUEUE.send({ jobId: newJob.id, type: newJob.type });
+      }
+    } catch (err) {
+      console.warn("Failed to persist job to D1 or Queue:", err);
+      return Response.json({ error: { code: "INTERNAL_ERROR", message: "Failed to enqueue job" } }, { status: 500 });
+    }
   }
 
-  return Response.json(newJob, { status: 200 });
+  return Response.json(newJob, { status: 202 });
 };

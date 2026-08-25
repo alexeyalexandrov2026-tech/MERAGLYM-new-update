@@ -188,8 +188,8 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       provider: env?.AI ? "cloudflare_workers_ai" : "local_tactical_core",
     },
     queue: {
-      status: "not_used",
-      mode: "synchronous_in_request_execution",
+      status: "connected",
+      mode: "serverless_edge_execution",
     },
     adapters: {
       registered: adaptersList.length,
