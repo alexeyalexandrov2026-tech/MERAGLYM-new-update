@@ -256,7 +256,18 @@ export default function SearchPanel() {
     const now = new Date().toISOString();
     const cleanInput = targetInput.trim();
     const isPhone = cleanInput.startsWith("+7") || cleanInput.startsWith("8") || (cleanInput.length >= 10 && /^\+?\d+$/.test(cleanInput.replace(/[\s()-]/g, "")));
-    const adapterName = isPhone ? "phone_person_correlator" : ((activeNode?.type && activeNode.type !== "folder" && activeNode.type !== "url") ? activeNode.type : (activeNode?.name || "universal_recon"));
+    const isInn = /^\d{10}$|^\d{12}$/.test(cleanInput);
+    const isEmail = cleanInput.includes("@") && cleanInput.includes(".");
+    const isCrypto = (cleanInput.startsWith("1") || cleanInput.startsWith("3") || cleanInput.startsWith("bc1") || cleanInput.startsWith("0x")) && cleanInput.length > 24;
+    const adapterName = isPhone
+      ? "phone_person_correlator"
+      : isInn
+      ? "egrul_registry"
+      : isEmail
+      ? "holehe_recon"
+      : isCrypto
+      ? "crypto_recon"
+      : (activeNode?.type && activeNode.type !== "folder" && activeNode.type !== "url") ? activeNode.type : (activeNode?.name || "universal_recon");
 
     try {
       const res = await fetch("/api/jobs", {
@@ -264,7 +275,14 @@ export default function SearchPanel() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           type: adapterName,
-          payload: { target: cleanInput, phone: cleanInput, inn: cleanInput, email: cleanInput },
+          payload: {
+            target: cleanInput,
+            phone: cleanInput,
+            inn: cleanInput,
+            email: cleanInput,
+            sourceUrl: activeNode?.url && activeNode.url !== "#launch-tool" ? activeNode.url : undefined,
+            sourceName: activeNode?.name,
+          },
         }),
       });
 
@@ -276,8 +294,12 @@ export default function SearchPanel() {
           error?: any;
         };
 
-        // Polling loop
-        while (job.status === "QUEUED" || job.status === "RUNNING") {
+        // Jobs resolve synchronously in the initial response now; this loop
+        // is a bounded safety net only (never hangs indefinitely).
+        let pollAttempts = 0;
+        const MAX_POLL_ATTEMPTS = 15;
+        while ((job.status === "QUEUED" || job.status === "RUNNING") && pollAttempts < MAX_POLL_ATTEMPTS) {
+          pollAttempts++;
           await new Promise((resolve) => setTimeout(resolve, 2000));
           try {
             const pollRes = await fetch(`/api/jobs/${job.id}`);
@@ -289,6 +311,9 @@ export default function SearchPanel() {
           } catch {
             break;
           }
+        }
+        if (job.status === "QUEUED" || job.status === "RUNNING") {
+          job = { ...job, status: "FAILED", error: { code: "POLL_TIMEOUT", message: "Сервер не вернул результат за отведенное время" } };
         }
 
         const isVerified = job.result?.verified === true;
