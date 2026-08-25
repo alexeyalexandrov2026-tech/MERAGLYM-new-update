@@ -32,6 +32,8 @@ async function main() {
 
   const job = await prisma.job.create({
     data: {
+      // Ids are application-generated, matching the format the jobs API emits.
+      id: `job_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       type: "ingest_arf",
       status: "PENDING",
       payload: {

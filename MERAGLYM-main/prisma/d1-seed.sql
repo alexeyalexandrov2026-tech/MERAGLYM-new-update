@@ -23,8 +23,11 @@ CREATE TABLE IF NOT EXISTS "Node" (
     FOREIGN KEY ("parentId") REFERENCES "Node" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
+-- Mirrors the live D1 schema. Job ids are application-generated strings
+-- ("job_<ts>_<rand>"), so `id` must be TEXT — an INTEGER PRIMARY KEY would
+-- reject every insert the API makes.
 CREATE TABLE IF NOT EXISTS "Job" (
-    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "id" TEXT NOT NULL PRIMARY KEY,
     "type" TEXT NOT NULL,
     "status" TEXT NOT NULL DEFAULT 'PENDING',
     "payload" TEXT,
@@ -32,10 +35,11 @@ CREATE TABLE IF NOT EXISTS "Job" (
     "error" TEXT,
     "startedAt" DATETIME,
     "completedAt" DATETIME,
-    "retryCount" INTEGER NOT NULL DEFAULT 0,
-    "maxRetries" INTEGER NOT NULL DEFAULT 3,
+    "attempt" INTEGER NOT NULL DEFAULT 1,
+    "maxAttempts" INTEGER NOT NULL DEFAULT 3,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "idempotencyKey" TEXT
 );
 INSERT INTO "Node" (id, parentId, name, type, url, description, status, pricing, bestFor, input, output, opsec, opsecNote, localInstall, googleDork, registration, editUrl, api, invitationOnly, deprecated) VALUES (1, NULL, 'OSINT Framework', 'folder', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 INSERT INTO "Node" (id, parentId, name, type, url, description, status, pricing, bestFor, input, output, opsec, opsecNote, localInstall, googleDork, registration, editUrl, api, invitationOnly, deprecated) VALUES (2, 1, 'Username', 'folder', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);

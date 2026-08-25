@@ -89,3 +89,34 @@ POSTGRES_DB
 POSTGRES_PORT
 WEB_PORT
 ```
+
+## Cloudflare production topology
+
+The Docker Compose stack above (PostgreSQL + Python worker) is the **local**
+development path. The deployed site at `meraglym.pages.dev` runs on a different
+stack, and the two do not share a database:
+
+| Piece | Where it runs | In this repo? |
+| :--- | :--- | :---: |
+| Static UI + `/api/*` | Cloudflare Pages Functions (`functions/api/`) | yes |
+| `Job` / `Node` storage | Cloudflare D1 (`meraglym-db`) | schema only |
+| Job execution | `meraglym-consumer` Worker, queue `meraglym-jobs` | **no** |
+
+`POST /api/jobs` inserts a `QUEUED` row into D1 and sends a message to the
+`meraglym-jobs` queue. The `meraglym-consumer` Worker consumes it roughly 5-6
+seconds later, runs the adapter, and writes `COMPLETED` or `FAILED` back to the
+same row. The UI polls `GET /api/jobs/:id` until the status settles.
+
+Two consequences worth knowing before changing job handling:
+
+- **The consumer's source is not in this repository.** It registers a fixed set
+  of nine adapter ids (see `LIVE_ADAPTER_IDS` in `src/lib/adapterRouting.ts`) and
+  rejects any other job `type` with `ADAPTER_NOT_FOUND`. Adding an adapter to
+  `src/lib/adapters/registry.ts` does **not** make it available in production —
+  that requires redeploying the consumer. `tests/deployedAdapterContract.test.ts`
+  pins routing against the validators the consumer actually enforces.
+- **`queues.producers` in `wrangler.jsonc` is load-bearing.** Removing it
+  silently detaches the consumer and leaves every job stuck in `QUEUED`.
+
+The Python worker in `python/` polls PostgreSQL and is unrelated to this
+pipeline; it never sees D1 jobs.

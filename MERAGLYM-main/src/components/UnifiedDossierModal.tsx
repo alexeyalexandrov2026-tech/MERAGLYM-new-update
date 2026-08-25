@@ -20,17 +20,41 @@ export function UnifiedDossierModal({
   if (!isOpen) return null;
 
   const cleanInput = targetInput.trim();
-  const isQueued = !jobData || jobData.status === "QUEUED" || jobData.status === "RUNNING";
-  const isFailed = jobData?.status === "FAILED";
+  // "No result yet" and "legitimately queued" are distinct states. Treating a
+  // missing jobData as QUEUED is what rendered a permanent "waiting in queue"
+  // screen for jobs that had in fact already failed.
+  const hasNoData = !jobData;
+  const isQueued = !hasNoData && (jobData.status === "QUEUED" || jobData.status === "RUNNING");
+  const isFailed = jobData?.status === "FAILED" || jobData?.status === "TIMEOUT";
+
+  const statusLabel = hasNoData
+    ? "НЕТ ДАННЫХ"
+    : isQueued
+    ? "ПРОЦЕСС ВЫПОЛНЕНИЯ..."
+    : isFailed
+    ? "ЗАВЕРШЕНО С ОШИБКОЙ"
+    : "ВЫПОЛНЕНИЕ ЗАВЕРШЕНО";
 
   const renderContent = () => {
+    if (hasNoData) {
+      return (
+        <div style={{ padding: "40px", textAlign: "center", color: "#ffb86c", fontFamily: "var(--font-mono)" }}>
+          <div style={{ fontSize: "24px", marginBottom: "16px" }}>⚠️</div>
+          <h3>РЕЗУЛЬТАТ НЕ ПОЛУЧЕН</h3>
+          <p style={{ color: "var(--text-secondary)", fontSize: "13px" }}>
+            Клиент не получил ответ по задаче. Запустите разведку повторно.
+          </p>
+        </div>
+      );
+    }
+
     if (isQueued) {
       return (
         <div style={{ padding: "40px", textAlign: "center", color: "var(--text-accent)", fontFamily: "var(--font-mono)" }}>
           <div style={{ fontSize: "24px", marginBottom: "16px", animation: "pulse 1.5s infinite" }}>⏳</div>
           <h3>ОЖИДАНИЕ РЕЗУЛЬТАТОВ / В ОЧЕРЕДИ</h3>
-          <p style={{ color: "var(--text-secondary)", fontSize: "13px" }}>Запрос помещен в персистентную очередь D1.</p>
-          <p style={{ color: "var(--text-secondary)", fontSize: "13px" }}>Ожидается обработка воркером (Real execution).</p>
+          <p style={{ color: "var(--text-secondary)", fontSize: "13px" }}>Запрос помещен в персистентную очередь Cloudflare.</p>
+          <p style={{ color: "var(--text-secondary)", fontSize: "13px" }}>Ожидается обработка воркером meraglym-consumer (~5-6 с).</p>
           <pre style={{ textAlign: "left", background: "rgba(0,0,0,0.3)", padding: "12px", marginTop: "20px", borderRadius: "4px", fontSize: "12px" }}>
             {JSON.stringify(jobData, null, 2)}
           </pre>
@@ -38,25 +62,45 @@ export function UnifiedDossierModal({
       );
     }
 
-    const errObj = jobData?.data?.error || jobData?.error;
-    const isCredReq = errObj?.code === "CREDENTIAL_REQUIRED" || (typeof errObj === "string" && errObj.includes("CREDENTIAL_REQUIRED"));
+    // A failure can arrive nested under data.error, at the top level, or as the
+    // job's raw error object promoted into data — accept all three.
+    const errObj =
+      jobData?.data?.error ||
+      jobData?.error ||
+      (jobData?.data?.code ? jobData.data : null);
+    const errCode = typeof errObj === "object" && errObj ? errObj.code : undefined;
+    const isCredReq = errCode === "CREDENTIAL_REQUIRED" || (typeof errObj === "string" && errObj.includes("CREDENTIAL_REQUIRED"));
+    const noAdapter = errCode === "NO_MATCHING_ADAPTER" || errCode === "ADAPTER_NOT_FOUND";
+    const isTimeout = errCode === "POLL_TIMEOUT" || jobData?.status === "TIMEOUT";
 
     if (isFailed || isCredReq) {
       return (
         <div style={{ padding: "30px", fontFamily: "var(--font-mono)" }}>
           <div style={{ background: "rgba(255, 184, 108, 0.08)", border: "1px solid #ffb86c", borderRadius: "6px", padding: "20px", marginBottom: "20px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "10px", color: "#ffb86c", fontSize: "15px", fontWeight: "bold", marginBottom: "8px" }}>
-              <span>🔐</span>
-              <span>{isCredReq ? "ТРЕБУЕТСЯ API КЛЮЧ (CREDENTIAL_REQUIRED)" : "ОШИБКА ВЫПОЛНЕНИЯ (FAILED)"}</span>
+              <span>{isCredReq ? "🔐" : noAdapter ? "🧭" : isTimeout ? "⌛" : "⚠️"}</span>
+              <span>
+                {isCredReq
+                  ? "ТРЕБУЕТСЯ API КЛЮЧ (CREDENTIAL_REQUIRED)"
+                  : noAdapter
+                  ? "НЕТ ПОДХОДЯЩЕГО АДАПТЕРА"
+                  : isTimeout
+                  ? "ВОРКЕР НЕ ОТВЕТИЛ (TIMEOUT)"
+                  : "ОШИБКА ВЫПОЛНЕНИЯ (FAILED)"}
+              </span>
             </div>
             <p style={{ color: "var(--text-secondary)", fontSize: "12px", margin: "0 0 12px 0", lineHeight: "1.5" }}>
               {isCredReq
                 ? "Адаптер требует внешний API ключ для прямого обращения к реестру. В режиме без ключей генерация фейковых данных заблокирована."
+                : noAdapter
+                ? "Ни один из развернутых адаптеров не обрабатывает объект такого типа. Уточните запрос — телефон, ИНН/ОГРН, email, криптокошелёк или ФИО — либо выберите конкретный инструмент в дереве."
+                : isTimeout
+                ? "Задача принята в очередь, но воркер не вернул результат за отведенное время. Проверьте статус задачи позже — она могла завершиться уже после закрытия окна."
                 : "Адаптер завершил работу с ошибкой."}
             </p>
             {errObj && (
               <div style={{ background: "rgba(0,0,0,0.3)", padding: "10px 14px", borderRadius: "4px", color: "#ff5555", fontSize: "12px" }}>
-                <b>Код:</b> {typeof errObj === "object" ? errObj.code : "CREDENTIAL_REQUIRED"}<br />
+                <b>Код:</b> {errCode || "UNKNOWN"}<br />
                 <b>Сообщение:</b> {typeof errObj === "object" ? errObj.message : String(errObj)}
               </div>
             )}
@@ -254,7 +298,7 @@ export function UnifiedDossierModal({
 
           <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
             <span style={{ fontSize: "11px", fontFamily: "var(--font-mono)", background: "rgba(0, 255, 204, 0.2)", color: "#00ffcc", border: "1px solid #00ffcc40", padding: "4px 10px", borderRadius: "4px" }}>
-              {isQueued ? "ПРОЦЕСС ВЫПОЛНЕНИЯ..." : "ВЫПОЛНЕНИЕ ЗАВЕРШЕНО"}
+              {statusLabel}
             </span>
             <button onClick={onClose} style={{ background: "transparent", border: "1px solid var(--border-primary)", color: "var(--text-secondary)", fontSize: "16px", cursor: "pointer", padding: "6px 12px", borderRadius: "4px" }}>✕</button>
           </div>
