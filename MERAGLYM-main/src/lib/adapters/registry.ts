@@ -9,6 +9,9 @@ import type {
   AdapterResult,
   ExecutionContext,
   SourceProvenance,
+  Entity,
+  Observation,
+  Relationship,
 } from "./types";
 import { calculateConfidence } from "../confidence";
 
@@ -899,3 +902,260 @@ AdapterRegistry.register({
   },
 });
 
+
+// 10. Email Address Reconnaissance (MX resolution & provider attribution)
+AdapterRegistry.register({
+  id: "email_recon",
+  name: "Email Address Reconnaissance (MX & Provider Attribution)",
+  version: "1.0.0",
+  category: "global_recon",
+  requiredCredentials: [],
+  validate: (input: { email?: string; target?: string }) => {
+    const e = input?.email || input?.target || "";
+    if (!/^[^@\s]+@[^@\s.]+\.[^@\s]+$/.test(e)) {
+      throw new Error("Valid email address is required");
+    }
+  },
+  healthCheck: async () => ({
+    id: "email_recon",
+    name: "Email Address Reconnaissance (MX & Provider Attribution)",
+    version: "1.0.0",
+    status: "OPERATIONAL",
+    latencyMs: 120,
+    lastChecked: new Date().toISOString(),
+    requiredCredentials: [],
+    category: "global_recon",
+  }),
+  execute: async (input: { email?: string; target?: string }, ctx: ExecutionContext): Promise<AdapterResult> => {
+    const started = new Date().toISOString();
+    const email = (input.email || input.target || "").trim();
+    const [localPart, domain] = email.split("@");
+
+    // Resolve MX over Cloudflare DoH to confirm the domain can actually receive mail.
+    let mx: string[] | null = null;
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      const res = await fetch(
+        `https://cloudflare-dns.com/dns-query?type=MX&name=${encodeURIComponent(domain)}`,
+        { headers: { accept: "application/dns-json" }, signal: controller.signal }
+      );
+      clearTimeout(timeoutId);
+      if (res.ok) {
+        const json = await res.json() as { Answer?: { data: string }[] };
+        mx = (json?.Answer || []).map((a) => String(a.data));
+      }
+    } catch {
+      // Network failure is non-fatal: fall back to local parsing only.
+    }
+
+    const verified = Array.isArray(mx) && mx.length > 0;
+
+    return {
+      success: true,
+      adapter: "email_recon",
+      adapterVersion: "1.0.0",
+      startedAt: started,
+      completedAt: new Date().toISOString(),
+      verified,
+      data: {
+        email,
+        local_part: localPart,
+        domain,
+        deliverable: verified,
+        ...(verified && { mail_exchangers: mx }),
+        pivot_links: {
+          epieos: `https://epieos.com/?q=${encodeURIComponent(email)}`,
+          google: `https://www.google.com/search?q=${encodeURIComponent(`"${email}"`)}`,
+        },
+      },
+      observations: [],
+      entities: [
+        { type: "email", value: email, confidence: calculateConfidence({ sourceReliability: 0.9, parserConfidence: 1.0 }) },
+        { type: "domain", value: domain, confidence: calculateConfidence({ sourceReliability: verified ? 0.99 : 0.8, parserConfidence: 1.0 }) },
+      ],
+      relationships: [],
+      source: [{
+        sourceId: verified ? "src_cloudflare_doh" : "src_local_email_parser",
+        sourceType: verified ? "LIVE_EXTERNAL_SOURCE" : "LOCAL_ENRICHMENT",
+        url: verified ? `https://cloudflare-dns.com/dns-query?type=MX&name=${domain}` : undefined,
+        adapter: "email_recon",
+        adapterVersion: "1.0.0",
+        retrievedAt: started,
+        requestId: ctx.requestId,
+        verified,
+      }],
+      confidence: calculateConfidence({ sourceReliability: verified ? 0.95 : 0.7, parserConfidence: 1.0 }),
+    };
+  },
+});
+
+// 11. Universal Reconnaissance — fans out across every other applicable adapter
+//     and merges their findings into a single dossier.
+
+type TargetKind = "email" | "phone" | "inn" | "crypto" | "name";
+
+function classifyTarget(value: string): TargetKind {
+  const v = value.trim();
+  if (/^[^@\s]+@[^@\s.]+\.[^@\s]+$/.test(v)) return "email";
+  if (/^0x[a-fA-F0-9]{40}$/.test(v) || /^(bc1|[13])[a-zA-HJ-NP-Z0-9]{25,62}$/.test(v)) return "crypto";
+  const digits = v.replace(/[\s()+-]/g, "");
+  // Russian INN: 10 digits (legal entity) or 12 (sole trader).
+  if (/^\d{10}$/.test(digits) || /^\d{12}$/.test(digits)) return "inn";
+  if (/^\+?\d{7,15}$/.test(digits)) return "phone";
+  return "name";
+}
+
+const CATEGORIES_FOR_TARGET_KIND: Record<TargetKind, AdapterHealth["category"][]> = {
+  email: ["global_recon"],
+  phone: ["telecom", "global_recon"],
+  inn: ["cis_registry"],
+  crypto: ["crypto"],
+  name: ["cis_registry", "global_recon"],
+};
+
+AdapterRegistry.register({
+  id: "universal_recon",
+  name: "Universal Reconnaissance (Cross-Adapter Aggregator)",
+  version: "1.0.0",
+  category: "global_recon",
+  requiredCredentials: [],
+  validate: (input: Record<string, unknown>) => {
+    if (!input?.target && !input?.email && !input?.phone && !input?.inn) {
+      throw new Error("A target, email, phone or inn is required");
+    }
+  },
+  healthCheck: async () => ({
+    id: "universal_recon",
+    name: "Universal Reconnaissance (Cross-Adapter Aggregator)",
+    version: "1.0.0",
+    status: "OPERATIONAL",
+    latencyMs: 0,
+    lastChecked: new Date().toISOString(),
+    requiredCredentials: [],
+    category: "global_recon",
+  }),
+  execute: async (input: Record<string, unknown>, ctx: ExecutionContext): Promise<AdapterResult> => {
+    const started = new Date().toISOString();
+    const env = (ctx.env || {}) as Record<string, unknown>;
+
+    // Callers submit the same string in every field ({target, phone, inn, email}),
+    // and several adapters accept any non-empty string, so dispatching the raw
+    // payload makes a person's name come back as a "phone" and a "crypto_wallet".
+    // Classify the target once and only offer it to adapters that suit that kind.
+    const rawTarget = String(input.target || input.email || input.phone || input.inn || "").trim();
+    const targetKind = classifyTarget(rawTarget);
+    const scopedPayload: Record<string, unknown> = { target: rawTarget };
+    if (targetKind === "email") scopedPayload.email = rawTarget;
+    if (targetKind === "phone") scopedPayload.phone = rawTarget;
+    if (targetKind === "inn") scopedPayload.inn = rawTarget;
+    if (targetKind === "crypto") scopedPayload.address = rawTarget;
+
+    const candidates: IntelligenceAdapter[] = [];
+    const skipped: { adapter: string; reason: string }[] = [];
+
+    for (const adapter of AdapterRegistry.getAll()) {
+      if (adapter.id === "universal_recon") continue;
+
+      if (!CATEGORIES_FOR_TARGET_KIND[targetKind].includes(adapter.category)) {
+        skipped.push({ adapter: adapter.id, reason: `NOT_APPLICABLE_TO_${targetKind.toUpperCase()}` });
+        continue;
+      }
+
+      if (!adapter.requiredCredentials.every((key) => Boolean(env[key]))) {
+        skipped.push({ adapter: adapter.id, reason: "MISSING_CREDENTIALS" });
+        continue;
+      }
+
+      // The adapter's own validate() gets the final say on the scoped payload.
+      try {
+        await adapter.validate(scopedPayload);
+      } catch {
+        skipped.push({ adapter: adapter.id, reason: "INPUT_NOT_APPLICABLE" });
+        continue;
+      }
+
+      candidates.push(adapter);
+    }
+
+    const settled = await Promise.allSettled(
+      candidates.map((adapter) =>
+        adapter.execute(scopedPayload, { ...ctx, requestId: `${ctx.requestId}:${adapter.id}` })
+      )
+    );
+
+    const entities: Entity[] = [];
+    const observations: Observation[] = [];
+    const relationships: Relationship[] = [];
+    const source: SourceProvenance[] = [];
+    const sections: Record<string, unknown> = {};
+    const failed: { adapter: string; reason: string }[] = [];
+
+    settled.forEach((outcome, i) => {
+      const adapter = candidates[i];
+      if (outcome.status === "rejected") {
+        failed.push({
+          adapter: adapter.id,
+          reason: outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason),
+        });
+        return;
+      }
+      const result = outcome.value;
+      sections[adapter.id] = result.data;
+      entities.push(...result.entities);
+      observations.push(...result.observations);
+      relationships.push(...result.relationships);
+      source.push(...result.source);
+    });
+
+    const succeeded = candidates.length - failed.length;
+    const verified = source.some((s) => s.verified);
+
+    // Several adapters can report the same entity; keep one of each.
+    const seen = new Set<string>();
+    const mergedEntities = entities.filter((entity) => {
+      const key = `${entity.type}:${entity.value}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    return {
+      success: true,
+      adapter: "universal_recon",
+      adapterVersion: "1.0.0",
+      startedAt: started,
+      completedAt: new Date().toISOString(),
+      verified,
+      data: {
+        target: input.target || input.email || input.phone || input.inn || "",
+        adapters_run: candidates.map((a) => a.id),
+        adapters_succeeded: succeeded,
+        adapters_failed: failed,
+        adapters_skipped: skipped,
+        sections,
+      },
+      observations,
+      entities: mergedEntities,
+      relationships,
+      source: [
+        ...source,
+        {
+          sourceId: "src_universal_recon_aggregator",
+          sourceType: verified ? "LIVE_EXTERNAL_SOURCE" : "LOCAL_ENRICHMENT",
+          adapter: "universal_recon",
+          adapterVersion: "1.0.0",
+          retrievedAt: started,
+          requestId: ctx.requestId,
+          verified,
+        },
+      ],
+      // No adapter produced anything, so there is nothing to be confident about.
+      confidence: succeeded === 0 ? null : calculateConfidence({
+        sourceReliability: verified ? 0.95 : 0.7,
+        corroborationCount: succeeded,
+        parserConfidence: 1.0,
+      }),
+    };
+  },
+});

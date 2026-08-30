@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import type { Node } from "@prisma/client";
 import { useI18n } from "@/lib/i18nContext";
 import { UnifiedDossierModal } from "./UnifiedDossierModal";
+import { resolveAdapterId } from "@/lib/adapters/resolveAdapterId";
 
 interface NodeViewProps {
   node: Node | null;
@@ -46,7 +47,7 @@ export default function NodeView({ node }: NodeViewProps) {
     const now = new Date().toISOString();
     const cleanInput = targetInput.trim();
     const isPhone = cleanInput.startsWith("+7") || cleanInput.startsWith("8") || (cleanInput.length >= 10 && /^\+?\d+$/.test(cleanInput.replace(/[\s()-]/g, "")));
-    const adapterName = isPhone ? "phone_person_correlator" : ((node?.type && node.type !== "folder" && node.type !== "url") ? node.type : (node?.name || "universal_recon"));
+    const adapterName = isPhone ? "phone_person_correlator" : resolveAdapterId(node);
 
     // Prepare robust phone intelligence payload
     let cleanDigits = cleanInput.replace(/\D/g, "");

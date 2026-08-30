@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import type { Node } from "@prisma/client";
 import { useI18n } from "@/lib/i18nContext";
 import { UnifiedDossierModal } from "./UnifiedDossierModal";
+import { resolveAdapterId } from "@/lib/adapters/resolveAdapterId";
 
 export default function SearchPanel() {
   const { t, locale, isRussian } = useI18n();
@@ -256,7 +257,7 @@ export default function SearchPanel() {
     const now = new Date().toISOString();
     const cleanInput = targetInput.trim();
     const isPhone = cleanInput.startsWith("+7") || cleanInput.startsWith("8") || (cleanInput.length >= 10 && /^\+?\d+$/.test(cleanInput.replace(/[\s()-]/g, "")));
-    const adapterName = isPhone ? "phone_person_correlator" : ((activeNode?.type && activeNode.type !== "folder" && activeNode.type !== "url") ? activeNode.type : (activeNode?.name || "universal_recon"));
+    const adapterName = isPhone ? "phone_person_correlator" : resolveAdapterId(activeNode);
 
     try {
       const res = await fetch("/api/jobs", {
