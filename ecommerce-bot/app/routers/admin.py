@@ -17,7 +17,9 @@ from ..models import (
     OrderStatus,
     OutboxMessage,
     OutboxStatus,
+    PaymentEventStatus,
     Product,
+    WebhookEvent,
     utcnow,
 )
 from ..payments import PaymentGateway
@@ -32,6 +34,8 @@ from ..schemas import (
     RefundOut,
     RefundRequest,
     StockAdjustment,
+    WebhookEventOut,
+    WebhookReplayResult,
 )
 from ..security import audit, require_admin
 from ..services import catalog, inventory
@@ -291,3 +295,120 @@ async def retry_outbox_message(
         )
     )
     return OutboxMessageOut.model_validate(message)
+
+
+# --------------------------------------------------------------------------- #
+# Webhook ledger and replay
+# --------------------------------------------------------------------------- #
+@router.get("/webhooks", response_model=list[WebhookEventOut])
+async def list_webhook_events(
+    session: Annotated[AsyncSession, Depends(get_session)],
+    status: PaymentEventStatus | None = None,
+    event_type: Annotated[str | None, Query(max_length=120)] = None,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+) -> list[WebhookEventOut]:
+    """Inspect the webhook ledger — the first place to look when an order
+    looks stuck. Filter by ``status=failed`` to find events needing a replay."""
+    stmt = select(WebhookEvent).order_by(WebhookEvent.received_at.desc()).limit(limit)
+    if status is not None:
+        stmt = stmt.where(WebhookEvent.status == status)
+    if event_type:
+        stmt = stmt.where(WebhookEvent.event_type == event_type)
+    rows = (await session.execute(stmt)).scalars().all()
+    return [WebhookEventOut.model_validate(row) for row in rows]
+
+
+@router.post("/webhooks/{event_id}/replay", response_model=WebhookReplayResult)
+async def replay_webhook_event(
+    event_id: Annotated[str, Path(min_length=1, max_length=36)],
+    request: Request,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    actor: Annotated[str, Depends(require_admin)],
+) -> WebhookReplayResult:
+    """Re-apply a stored event's side effects.
+
+    Safe to call on any event, including one already processed: every handler
+    is idempotent, so a replay of an applied event is a no-op. This is the
+    operator's recovery path when a handler failed on a transient fault and
+    the automatic retry budget has been exhausted.
+    """
+    from ..errors import NotFoundError
+    from ..services import webhooks as webhook_service
+
+    record = await session.get(WebhookEvent, event_id)
+    if record is None:
+        raise NotFoundError("Webhook event not found.")
+
+    session.add(
+        audit(
+            actor=actor,
+            action="webhook.replay",
+            request=request,
+            settings=settings,
+            subject_type="webhook_event",
+            subject_id=record.id,
+            detail={
+                "provider_event_id": record.provider_event_id,
+                "event_type": record.event_type,
+                "previous_status": record.status.value,
+            },
+        )
+    )
+
+    event = webhook_service.event_from_record(record)
+    if event is None:
+        record.status = PaymentEventStatus.failed
+        record.error = "no stored payload; redeliver from the provider dashboard"
+        return WebhookReplayResult.model_validate(
+            {
+                "id": record.id,
+                "provider_event_id": record.provider_event_id,
+                "status": record.status,
+                "order_id": record.order_id,
+                "error": record.error,
+            }
+        )
+
+    record.attempts += 1
+    if event.type not in webhook_service.HANDLED_EVENT_TYPES:
+        record.status = PaymentEventStatus.ignored
+        record.processed_at = utcnow()
+    else:
+        try:
+            record.order_id = await webhook_service.process_event(session, event, settings)
+        except Exception as exc:
+            log.exception("webhook_replay_failed", extra={"event_id": record.id})
+            record.status = PaymentEventStatus.failed
+            record.error = f"{type(exc).__name__}: {exc}"[:2000]
+            return WebhookReplayResult.model_validate(
+                {
+                    "id": record.id,
+                    "provider_event_id": record.provider_event_id,
+                    "status": record.status,
+                    "order_id": record.order_id,
+                    "error": record.error,
+                }
+            )
+        record.status = PaymentEventStatus.processed
+        record.processed_at = utcnow()
+        record.error = None
+
+    log.info(
+        "webhook_replayed",
+        extra={
+            "event_id": record.id,
+            "provider_event_id": record.provider_event_id,
+            "status": record.status.value,
+            "actor": actor,
+        },
+    )
+    return WebhookReplayResult.model_validate(
+        {
+            "id": record.id,
+            "provider_event_id": record.provider_event_id,
+            "status": record.status,
+            "order_id": record.order_id,
+            "error": record.error,
+        }
+    )

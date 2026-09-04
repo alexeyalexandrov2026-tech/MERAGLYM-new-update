@@ -14,10 +14,12 @@ import re
 from pathlib import Path
 
 import pytest
+from alembic import command
 from alembic.config import Config
 from alembic.script import ScriptDirectory
 
 from app.models import Base
+from tests.conftest import TEST_DATABASE_URL, requires_postgres
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
@@ -98,3 +100,49 @@ def test_webhook_dedupe_constraint_is_present():
     assert "UNIQUE (dedupe_key)" in sql, "receipt dedupe index is missing"
     # JSONB, not TEXT — the payload is queried by key in production.
     assert "payload JSONB" in sql
+
+
+# --------------------------------------------------------------------------- #
+# The strongest parity check available: apply the migrations to a real server
+# and ask alembic whether the resulting schema differs from the models at all.
+# --------------------------------------------------------------------------- #
+@requires_postgres
+def test_applied_migration_matches_the_models_exactly():
+    """Run `alembic upgrade head` on a live database, then diff against the ORM.
+
+    The text-based checks above catch missing tables and columns. This catches
+    everything else alembic knows about: type mismatches, nullability, server
+    defaults, indexes and constraints.
+    """
+    import asyncio
+
+    from alembic.autogenerate import compare_metadata
+    from alembic.migration import MigrationContext
+    from sqlalchemy.ext.asyncio import create_async_engine
+
+    sync_url = TEST_DATABASE_URL.replace("+asyncpg", "")
+    config = Config(str(PROJECT_ROOT / "alembic.ini"))
+    config.set_main_option("script_location", str(PROJECT_ROOT / "migrations"))
+    config.set_main_option("sqlalchemy.url", sync_url)
+
+    async def build_schema_from_migrations() -> list:
+        engine = create_async_engine(TEST_DATABASE_URL)
+        try:
+            # Start from nothing so the migration builds the whole schema.
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.drop_all)
+                await conn.exec_driver_sql("DROP TABLE IF EXISTS alembic_version")
+            await asyncio.to_thread(command.upgrade, config, "head")
+            async with engine.connect() as conn:
+                return await conn.run_sync(
+                    lambda sync_conn: compare_metadata(
+                        MigrationContext.configure(sync_conn), Base.metadata
+                    )
+                )
+        finally:
+            await engine.dispose()
+
+    diffs = asyncio.run(build_schema_from_migrations())
+    # alembic reports the bookkeeping table as an addition; it is not ours.
+    real = [d for d in diffs if "alembic_version" not in str(d)]
+    assert not real, f"migration and models disagree: {real}"

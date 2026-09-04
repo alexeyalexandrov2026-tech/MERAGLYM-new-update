@@ -96,3 +96,61 @@ async def test_security_headers_are_present(client, products):
     assert response.headers["X-Content-Type-Options"] == "nosniff"
     assert response.headers["X-Frame-Options"] == "DENY"
     assert response.headers["X-Request-ID"]
+
+
+# --------------------------------------------------------------------------- #
+# Unknown fields are rejected at every level of the request body, not just the
+# top one. A nested model that silently ignores extras is how a tampered
+# payload smuggles a price or a discount past validation.
+# --------------------------------------------------------------------------- #
+@pytest.mark.parametrize(
+    "payload, where",
+    [
+        (checkout_payload(surprise="x"), "top level"),
+        (
+            checkout_payload(
+                items=[{"sku": "COF-ETH-250", "quantity": 1, "unit_price_minor": 1}]
+            ),
+            "line item: injected price",
+        ),
+        (
+            checkout_payload(
+                items=[{"sku": "COF-ETH-250", "quantity": 1, "discount_pct": 100}]
+            ),
+            "line item: injected discount",
+        ),
+        (
+            checkout_payload(
+                shipping_address={
+                    "line1": "12 Example Street",
+                    "city": "Springfield",
+                    "postal_code": "12345",
+                    "country": "US",
+                    "shipping_minor": 0,
+                }
+            ),
+            "shipping address: injected shipping cost",
+        ),
+    ],
+)
+async def test_unknown_fields_are_rejected_at_every_level(client, products, payload, where):
+    response = await client.post("/api/checkout/sessions", json=payload)
+    assert response.status_code == 422, f"{where} was accepted: {response.text}"
+    assert response.json()["error"]["code"] == "validation_error"
+
+
+async def test_no_order_is_created_when_validation_fails(client, products):
+    """A rejected request must leave no trace: no order, no reservation."""
+    from sqlalchemy import func, select
+
+    from app.db import session_scope
+    from app.models import Order, Product
+
+    await client.post(
+        "/api/checkout/sessions",
+        json=checkout_payload(items=[{"sku": "COF-ETH-250", "quantity": 1, "price": 0}]),
+    )
+    async with session_scope() as db:
+        assert await db.scalar(select(func.count()).select_from(Order)) == 0
+        product = await db.scalar(select(Product).where(Product.sku == "COF-ETH-250"))
+        assert product.stock_reserved == 0

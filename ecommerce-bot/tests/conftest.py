@@ -1,9 +1,18 @@
 """Test fixtures.
 
-The suite runs against SQLite (aiosqlite) with the real application wiring:
-real routers, real services, real Stripe *signature verification*. Only the
-outbound provider HTTP calls and the SMTP transport are faked, because those
-are the parts that require a network and credentials.
+The suite runs with the real application wiring: real routers, real services,
+real Stripe *signature verification*. Only the outbound provider HTTP calls
+and the SMTP transport are faked, because those are the parts that require a
+network and credentials.
+
+Two backends are supported:
+
+* **SQLite (default)** — no server needed, so the suite runs anywhere.
+* **PostgreSQL** — set ``TEST_DATABASE_URL`` to run against the real target
+  database. This is the only way to exercise ``SELECT ... FOR UPDATE`` and
+  ``SKIP LOCKED``, so the concurrency tests are skipped without it.
+
+      TEST_DATABASE_URL=postgresql+asyncpg://shopbot:shopbot@127.0.0.1/shopbot_test pytest
 """
 
 from __future__ import annotations
@@ -17,7 +26,7 @@ os.environ.update(
     ENVIRONMENT="test",
     PAYMENT_PROVIDER="fake",
     EMAIL_BACKEND="memory",
-    DATABASE_URL="sqlite+aiosqlite:///:memory:",
+    DATABASE_URL=os.environ.get("TEST_DATABASE_URL", "sqlite+aiosqlite:///:memory:"),
     STRIPE_WEBHOOK_SECRET="whsec_test_secret",
     ADMIN_API_KEY="test-admin-key-0123456789abcdefghijklmn",
     PUBLIC_BASE_URL="http://testserver",
@@ -31,7 +40,7 @@ os.environ.update(
 
 import httpx
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-from sqlalchemy.pool import StaticPool
+from sqlalchemy.pool import NullPool, StaticPool
 
 from app import db as db_module
 from app.config import get_settings, reset_settings_cache
@@ -42,6 +51,14 @@ from app.payments.fake import FakeGateway
 from app.ratelimit import MemoryBackend, RateLimiter
 
 ADMIN_KEY = os.environ["ADMIN_API_KEY"]
+TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL", "")
+USING_POSTGRES = TEST_DATABASE_URL.startswith("postgresql")
+
+#: Concurrency behaviour depends on real row locks, which SQLite does not have.
+requires_postgres = pytest.mark.skipif(
+    not USING_POSTGRES,
+    reason="needs a real PostgreSQL server; set TEST_DATABASE_URL",
+)
 
 
 @pytest.fixture
@@ -51,15 +68,22 @@ def anyio_backend() -> str:
 
 @pytest.fixture
 async def engine():
+    """A clean database per test, on whichever backend is configured."""
     reset_settings_cache()
-    # One shared in-memory database for the whole test, across all sessions.
-    engine = create_async_engine(
-        "sqlite+aiosqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    if USING_POSTGRES:
+        engine = create_async_engine(TEST_DATABASE_URL, poolclass=NullPool)
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.drop_all)
+            await conn.run_sync(Base.metadata.create_all)
+    else:
+        # One shared in-memory database for the whole test, across all sessions.
+        engine = create_async_engine(
+            "sqlite+aiosqlite:///:memory:",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
     maker = async_sessionmaker(engine, expire_on_commit=False, autoflush=False)
     db_module.set_engine(engine, maker)
     yield engine

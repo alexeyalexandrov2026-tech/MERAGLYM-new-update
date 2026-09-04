@@ -51,6 +51,7 @@ HANDLED_EVENT_TYPES = {
     "checkout.session.async_payment_failed",
     "checkout.session.expired",
     "payment_intent.payment_failed",
+    "payment_intent.canceled",
     "charge.refunded",
     "charge.refund.updated",
     "refund.updated",
@@ -97,6 +98,7 @@ async def process_event(
         "checkout.session.async_payment_failed": _handle_session_payment_failed,
         "checkout.session.expired": _handle_session_expired,
         "payment_intent.payment_failed": _handle_payment_intent_failed,
+        "payment_intent.canceled": _handle_payment_intent_canceled,
         "charge.refunded": _handle_charge_refunded,
         "charge.refund.updated": _handle_refund_updated,
         "refund.updated": _handle_refund_updated,
@@ -253,6 +255,30 @@ async def _handle_payment_intent_failed(
     return await _fail_order(
         session, order, settings, target=OrderStatus.payment_failed, reason=reason
     )
+
+
+async def _handle_payment_intent_canceled(
+    session: AsyncSession, event: PaymentEvent, settings: Settings
+) -> str | None:
+    """The payment was abandoned or cancelled before it ever succeeded.
+
+    Stripe spells the event ``payment_intent.canceled`` (one 'l'). The order is
+    cancelled rather than marked failed: nothing went wrong, the buyer simply
+    did not go through with it, so the buyer gets no failure notice. Stock is
+    released either way.
+    """
+    order = await _resolve_order(session, event)
+    if order is None:
+        return None
+    reason = (event.data.get("cancellation_reason") or "the payment was cancelled")
+    if orders.transition(order, OrderStatus.cancelled, strict=False):
+        order.failure_reason = str(reason)[:500]
+        await inventory.release(session, order)
+        log.info(
+            "order_cancelled",
+            extra={"order_id": order.id, "reason": str(reason)[:200]},
+        )
+    return order.id
 
 
 async def _handle_charge_refunded(

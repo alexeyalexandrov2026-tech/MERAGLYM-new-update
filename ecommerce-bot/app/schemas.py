@@ -13,6 +13,7 @@ from .models import (
     InventoryState,
     OrderStatus,
     OutboxStatus,
+    PaymentEventStatus,
     RefundStatus,
 )
 
@@ -245,6 +246,27 @@ class OutboxMessageOut(ORMModel):
     last_error: str | None
     next_attempt_at: dt.datetime
     sent_at: dt.datetime | None
+
+
+class WebhookEventOut(ORMModel):
+    id: str
+    provider: str
+    provider_event_id: str
+    event_type: str
+    status: PaymentEventStatus
+    attempts: int
+    order_id: str | None
+    error: str | None
+    received_at: dt.datetime
+    processed_at: dt.datetime | None
+
+
+class WebhookReplayResult(BaseModel):
+    id: str
+    provider_event_id: str
+    status: PaymentEventStatus
+    order_id: str | None
+    error: str | None
 
 
 class HealthOut(BaseModel):

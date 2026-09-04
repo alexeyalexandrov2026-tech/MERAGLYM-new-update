@@ -92,7 +92,7 @@ async def seed() -> int:
                     )
                 )
                 created += 1
-        log.info("catalog_seeded", extra={"created": created})
+        log.info("catalog_seeded", extra={"products_created": created})
         return created
     finally:
         await dispose_engine()

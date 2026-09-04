@@ -28,12 +28,27 @@ log = logging.getLogger(__name__)
 async def _lock_products(session: AsyncSession, product_ids: list[str]) -> dict[str, Product]:
     """Load products, taking row locks on backends that support them.
 
-    Ordering by id gives every transaction the same lock order, which is what
-    prevents deadlocks between concurrent multi-item checkouts.
+    Two details here are load-bearing, and getting either wrong silently
+    reintroduces overselling:
+
+    * ``order_by(id)`` gives every transaction the same lock order, which is
+      what prevents deadlocks between concurrent multi-item checkouts.
+    * ``populate_existing()`` forces the freshly locked row values over
+      whatever is already in the session's identity map. Callers routinely
+      read a product *before* locking it (to price the basket), and without
+      this the ``FOR UPDATE`` query waits for the lock correctly and then
+      hands back the pre-lock, stale attribute values — so every racing
+      transaction computes availability from the same outdated number and
+      they all think there is stock.
     """
     if not product_ids:
         return {}
-    stmt = select(Product).where(Product.id.in_(product_ids)).order_by(Product.id)
+    stmt = (
+        select(Product)
+        .where(Product.id.in_(product_ids))
+        .order_by(Product.id)
+        .execution_options(populate_existing=True)
+    )
     if supports_row_locking(session):
         stmt = stmt.with_for_update()
     rows = (await session.execute(stmt)).scalars().all()

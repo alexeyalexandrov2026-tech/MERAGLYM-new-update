@@ -13,7 +13,7 @@ import logging
 import random
 from collections.abc import Sequence
 
-from sqlalchemy import select, update
+from sqlalchemy import or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -181,6 +181,15 @@ async def claim_batch(
         .where(
             OutboxMessage.status.in_([OutboxStatus.pending, OutboxStatus.failed]),
             OutboxMessage.next_attempt_at <= now,
+            # Exclude rows another worker currently holds. SKIP LOCKED alone is
+            # not enough: it only hides rows whose claiming transaction is still
+            # open, so a worker whose SELECT lands just after that transaction
+            # commits would otherwise re-claim a message already in flight and
+            # send the receipt twice.
+            or_(
+                OutboxMessage.locked_until.is_(None),
+                OutboxMessage.locked_until < now,
+            ),
         )
         .order_by(OutboxMessage.next_attempt_at)
         .limit(limit)
@@ -203,11 +212,25 @@ async def deliver(
     session: AsyncSession,
     message: OutboxMessage,
     channel: NotificationChannel,
+    *,
+    worker_id: str | None = None,
 ) -> bool:
     """Attempt one delivery. Returns True on success.
 
     Never raises: a failure is recorded on the row so the worker keeps going.
+
+    When ``worker_id`` is given, the message is only sent if this worker still
+    holds the claim. That closes the window between claiming and delivering, in
+    which the lock may have expired and been reclaimed by someone else.
     """
+    if message.status is OutboxStatus.sent:
+        return False
+    if worker_id is not None and message.locked_by not in (None, worker_id):
+        log.info(
+            "receipt_delivery_skipped_not_owner",
+            extra={"outbox_id": message.id, "locked_by": message.locked_by},
+        )
+        return False
     message.attempts += 1
     try:
         await channel.send(

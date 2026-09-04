@@ -83,7 +83,9 @@ class Worker:
                 message = await db.get(OutboxMessage, message_id)
                 if message is None:
                     continue
-                if await outbox.deliver(db, message, self.channel):
+                if await outbox.deliver(
+                    db, message, self.channel, worker_id=self.worker_id
+                ):
                     delivered += 1
         return delivered
 

@@ -60,12 +60,30 @@ The development admin key is printed at startup when `ENVIRONMENT=development`
 and `ADMIN_API_KEY` is unset. Interactive docs are at `/docs` (disabled in
 production).
 
-Run the tests — no network, no credentials, no database server needed:
+### Running the tests
+
+The suite runs on SQLite by default, so it needs no server, no network and no
+credentials:
 
 ```bash
-pytest -q          # 87 tests
-ruff check app tests
+pytest -q                  # 149 pass, 7 skipped (see below)
+ruff check app tests migrations
 ```
+
+Row locking, `SKIP LOCKED` and the shared rate limiter cannot be exercised on
+SQLite, so those tests **skip** rather than pass for the wrong reason. Point
+them at real services to run everything:
+
+```bash
+export TEST_DATABASE_URL=postgresql+asyncpg://shopbot:shopbot@127.0.0.1:5432/shopbot_test
+export REDIS_TEST_URL=redis://127.0.0.1:6379/0
+pytest -q                  # 156 pass, 0 skipped
+```
+
+The PostgreSQL-only tests are the ones that matter most: concurrent checkouts
+must not oversell, concurrent duplicate webhooks must apply once, and two
+workers draining the outbox must not send the same receipt twice. CI runs both
+configurations.
 
 ---
 
@@ -88,6 +106,7 @@ from this code.
    | `checkout.session.async_payment_failed` | mark failed, release stock |
    | `checkout.session.expired` | expire order, release stock |
    | `payment_intent.payment_failed` | mark failed, release stock, notify buyer |
+   | `payment_intent.canceled` | cancel order, release stock (no failure email) |
    | `charge.refunded` | apply refund, restock on a full refund |
    | `charge.refund.updated` / `refund.updated` | track a refund that later fails |
 
@@ -184,6 +203,8 @@ payment.**
 | POST | `/admin/products` · `PATCH /admin/products/{id}` | admin | catalog |
 | POST | `/admin/products/{id}/stock` | admin | stock adjustment |
 | GET | `/admin/outbox` · `POST /admin/outbox/{id}/retry` | admin | receipt queue |
+| GET | `/admin/webhooks` | admin | webhook ledger; filter `?status=failed` |
+| POST | `/admin/webhooks/{id}/replay` | admin | re-apply a stored event (idempotent) |
 
 Send `Idempotency-Key` on `POST /api/checkout/sessions`. Without one, a digest
 of the request body is used, so a double-clicked buy button still creates one
@@ -249,6 +270,22 @@ Scrape `/metrics`. Alert on:
 - Log events worth alerting on: `webhook_verification_failed` (a spike means
   either a rotated secret or someone probing), `webhook_amount_mismatch`
   (investigate every one), `webhook_processing_failed`, `admin_auth_failed`.
+
+### When an order looks stuck
+
+The webhook ledger is the first place to look. Every verified event is stored
+with its status, attempt count and error:
+
+```bash
+curl -H "X-Admin-Api-Key: $ADMIN_API_KEY" '<base>/admin/webhooks?status=failed'
+curl -X POST -H "X-Admin-Api-Key: $ADMIN_API_KEY" '<base>/admin/webhooks/<id>/replay'
+```
+
+Replay re-applies the stored event's side effects. It is safe to run on any
+event, including one already applied — every handler is idempotent, so a replay
+of applied work is a no-op. The worker already retries failed events
+automatically; the endpoint is for when that retry budget is exhausted or an
+operator wants to force the issue. Every replay is written to the audit log.
 
 ### Backups and rollback
 
@@ -323,3 +360,36 @@ Before taking real money:
 - **Multi-currency** is per-product and single-currency per order; there is no
   FX conversion.
 - **The webhook payload** is retained; see *Data retention* above.
+
+## Verification status
+
+Verified by execution against real services:
+
+- Full suite on **SQLite** (149 passed, 7 skipped) and on **PostgreSQL 16 +
+  Redis 7** (156 passed, 0 skipped), repeated runs, no flakes.
+- `alembic upgrade head`, `downgrade base`, `upgrade head` applied to a live
+  PostgreSQL database; `compare_metadata` reports zero drift against the ORM.
+  The parity tests were confirmed to *fail* on a deliberately introduced
+  column, so they are known to detect drift rather than merely passing.
+- A real `uvicorn` server plus the worker, end to end: catalog, checkout,
+  idempotent replay, stock reservation, signed webhook (one processed and two
+  duplicates), forged signature rejected, stock committed, receipt rendered and
+  delivered, partial refund, duplicate refund suppressed, over-refund rejected,
+  remaining-balance refund with restock, metrics, webhook replay, Redis-backed
+  rate limiting (10 allowed then 429 with `Retry-After`), security headers, no
+  secrets in logs, graceful SIGTERM shutdown of both processes.
+
+Verified structurally only (no daemon available in the build environment):
+
+- **Docker image build** — the Dockerfile is not built here; `docker compose
+  config` validates. CI builds the image on every push.
+- **Compose stack runtime** — service wiring, health checks and restart
+  policies are validated as configuration, not started.
+
+Not verified at all — these need credentials this environment does not have:
+
+- **Live Stripe API calls.** Signature verification runs the real SDK against
+  real signatures, but no request is made to Stripe. Run one sandbox purchase
+  with `stripe listen` before going live.
+- **Real SMTP delivery.** The channel is exercised through its interface with
+  induced transient and permanent failures; no message is sent to a real MTA.
