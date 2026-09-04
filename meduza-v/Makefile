@@ -35,4 +35,4 @@ docker-down:  ## Stop the stack
 	docker compose down
 
 backup:  ## Take an ad-hoc database backup
-	docker compose exec -T db pg_dump -U shopbot -d shopbot -Fc > backups/manual-$$(date +%Y%m%dT%H%M%SZ).dump
+	docker compose exec -T db pg_dump -U meduza -d meduza -Fc > backups/manual-$$(date +%Y%m%dT%H%M%SZ).dump

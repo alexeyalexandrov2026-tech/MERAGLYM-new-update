@@ -58,7 +58,7 @@ async def lifespan(app: FastAPI):
 def create_app() -> FastAPI:
     settings = get_settings()
     app = FastAPI(
-        title="Shopbot",
+        title="Meduza V",
         version="1.0.0",
         description=(
             "Continuously running storefront for lawful general merchandise: "

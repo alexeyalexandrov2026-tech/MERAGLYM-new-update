@@ -73,9 +73,9 @@ async def metrics() -> Response:
     from ..models import Order, OutboxMessage
 
     lines = [
-        "# HELP shopbot_uptime_seconds Seconds since process start.",
-        "# TYPE shopbot_uptime_seconds gauge",
-        f"shopbot_uptime_seconds {time.time() - _STARTED_AT:.0f}",
+        "# HELP meduza_uptime_seconds Seconds since process start.",
+        "# TYPE meduza_uptime_seconds gauge",
+        f"meduza_uptime_seconds {time.time() - _STARTED_AT:.0f}",
     ]
     try:
         async with session_scope() as session:
@@ -92,28 +92,28 @@ async def metrics() -> Response:
                 )
             ).all()
         lines += [
-            "# HELP shopbot_orders_total Orders by status.",
-            "# TYPE shopbot_orders_total gauge",
+            "# HELP meduza_orders_total Orders by status.",
+            "# TYPE meduza_orders_total gauge",
         ]
         counts = {status.value: 0 for status in OrderStatus}
         counts.update({row[0].value: int(row[1]) for row in order_rows})
         lines += [
-            f'shopbot_orders_total{{status="{name}"}} {value}'
+            f'meduza_orders_total{{status="{name}"}} {value}'
             for name, value in sorted(counts.items())
         ]
 
         lines += [
-            "# HELP shopbot_outbox_messages_total Receipt queue depth by status.",
-            "# TYPE shopbot_outbox_messages_total gauge",
+            "# HELP meduza_outbox_messages_total Receipt queue depth by status.",
+            "# TYPE meduza_outbox_messages_total gauge",
         ]
         outbox_counts = {status.value: 0 for status in OutboxStatus}
         outbox_counts.update({row[0].value: int(row[1]) for row in outbox_rows})
         lines += [
-            f'shopbot_outbox_messages_total{{status="{name}"}} {value}'
+            f'meduza_outbox_messages_total{{status="{name}"}} {value}'
             for name, value in sorted(outbox_counts.items())
         ]
     except Exception:
         log.exception("metrics_query_failed")
-        lines.append("shopbot_metrics_scrape_errors_total 1")
+        lines.append("meduza_metrics_scrape_errors_total 1")
 
     return Response("\n".join(lines) + "\n", media_type="text/plain; version=0.0.4")

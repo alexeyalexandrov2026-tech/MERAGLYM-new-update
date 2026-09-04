@@ -1,4 +1,4 @@
-# Shopbot — a continuously running e-commerce service
+# Meduza V — a continuously running e-commerce service
 
 A production-shaped storefront backend for **lawful general merchandise**
 (the sample catalog is specialty coffee, brewing equipment and homeware).
@@ -39,7 +39,50 @@ provider's prohibited-business list and your own counsel first.
 
 ---
 
-## Quick start (local, no real payments)
+## Install on your own PC (one command)
+
+The installer sets everything up for you: it checks Docker, generates fresh
+secrets, starts the database, cache, web service and worker, applies the
+migrations, loads a sample catalog, and waits until the shop answers its own
+health check. It is safe to re-run — an existing `.env` is never overwritten.
+
+**Windows** — double-click `installer\install.bat`
+(or right-click `installer\install.ps1` → *Run with PowerShell*):
+
+```powershell
+.\installer\install.ps1
+```
+
+**Linux / macOS**:
+
+```bash
+./installer/install.sh
+```
+
+The only prerequisite is **Docker Desktop** (Windows/macOS) or **Docker Engine**
+(Linux) — <https://www.docker.com/products/docker-desktop/>. The installer checks
+for it and tells you what to do if it is missing or not running.
+
+The first run starts in **demo mode**: payments are simulated and receipts are
+printed to the log, so the shop works immediately with no Stripe or email
+account. When the installer finishes it prints your storefront URL and the
+generated admin API key.
+
+To take real payments, edit `.env` — set `PAYMENT_PROVIDER=stripe` with your
+Stripe keys and `EMAIL_BACKEND=smtp` with your mail credentials — then run the
+installer again. Work through *Production hardening checklist* below first.
+
+To remove it: `installer\uninstall.ps1` (Windows) or `./installer/uninstall.sh`.
+Both keep your data by default; add `-Purge` / `--purge` to delete the database
+and configuration as well.
+
+| Installer option | Effect |
+|---|---|
+| `-Rebuild` / `--rebuild` | force a clean image rebuild |
+| `-NoSeed` / `--no-seed` | skip the sample catalog |
+| `-NoBrowser` | do not open the browser (Windows only) |
+
+## Quick start for developers (no Docker)
 
 ```bash
 cp .env.example .env          # then edit; the fake provider needs no keys
@@ -48,7 +91,7 @@ pip install -r requirements-dev.txt
 
 # Offline mode: fake payment provider, receipts printed to the log.
 export PAYMENT_PROVIDER=fake EMAIL_BACKEND=console
-export DATABASE_URL="postgresql+asyncpg://shopbot:shopbot@localhost:5432/shopbot"
+export DATABASE_URL="postgresql+asyncpg://meduza:meduza@localhost:5432/meduza"
 
 alembic upgrade head
 python -m app.seed
@@ -75,7 +118,7 @@ SQLite, so those tests **skip** rather than pass for the wrong reason. Point
 them at real services to run everything:
 
 ```bash
-export TEST_DATABASE_URL=postgresql+asyncpg://shopbot:shopbot@127.0.0.1:5432/shopbot_test
+export TEST_DATABASE_URL=postgresql+asyncpg://meduza:meduza@127.0.0.1:5432/meduza_test
 export REDIS_TEST_URL=redis://127.0.0.1:6379/0
 pytest -q                  # 156 pass, 0 skipped
 ```
@@ -260,11 +303,11 @@ starts**.
 
 Scrape `/metrics`. Alert on:
 
-- `shopbot_outbox_messages_total{status="dead_letter"} > 0` — receipts are not
+- `meduza_outbox_messages_total{status="dead_letter"} > 0` — receipts are not
   reaching customers.
-- `shopbot_outbox_messages_total{status="failed"}` rising — email provider
+- `meduza_outbox_messages_total{status="failed"}` rising — email provider
   trouble.
-- `shopbot_orders_total{status="pending_payment"}` growing without a matching
+- `meduza_orders_total{status="pending_payment"}` growing without a matching
   rise in `paid` — checkout is broken.
 - `/readyz` returning 503.
 - Log events worth alerting on: `webhook_verification_failed` (a spike means
@@ -296,7 +339,7 @@ them quarterly — an untested backup is a guess.
 ```bash
 # Restore
 docker compose stop web worker
-docker compose exec -T db pg_restore -U shopbot -d shopbot --clean --if-exists < backups/<file>.dump
+docker compose exec -T db pg_restore -U meduza -d meduza --clean --if-exists < backups/<file>.dump
 docker compose start web worker
 ```
 
@@ -371,6 +414,12 @@ Verified by execution against real services:
   PostgreSQL database; `compare_metadata` reports zero drift against the ORM.
   The parity tests were confirmed to *fail* on a deliberately introduced
   column, so they are known to detect drift rather than merely passing.
+- The **installers**: `install.sh` prerequisite gate, `.env` generation with
+  cryptographic secrets, the never-overwrite guarantee and file permissions;
+  `install.ps1` parsed and *executed* under PowerShell 7.4 (its `New-Secret`,
+  `Set-EnvValue` and `Write-EnvFile` functions, plus a full stubbed run), with
+  its generated `.env` confirmed BOM-free and LF-terminated and accepted by
+  both `docker compose config` and the app's own settings validation.
 - A real `uvicorn` server plus the worker, end to end: catalog, checkout,
   idempotent replay, stock reservation, signed webhook (one processed and two
   duplicates), forged signature rejected, stock committed, receipt rendered and
@@ -383,6 +432,11 @@ Verified structurally only (no daemon available in the build environment):
 
 - **Docker image build** — the Dockerfile is not built here; `docker compose
   config` validates. CI builds the image on every push.
+- **The installers against real Docker** — both were driven with a stubbed
+  `docker` command, so every step *except* the actual container start, health
+  poll and seed is exercised. `install.ps1` was run on Linux PowerShell, not on
+  Windows: the logic is verified, the Windows-specific environment (Docker
+  Desktop, execution policy, `Start-Process`) is not.
 - **Compose stack runtime** — service wiring, health checks and restart
   policies are validated as configuration, not started.
 

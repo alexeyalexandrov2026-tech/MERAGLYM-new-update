@@ -33,7 +33,7 @@ class Settings(BaseSettings):
 
     # ---- Core -------------------------------------------------------------
     environment: Environment = "development"
-    app_name: str = "shopbot"
+    app_name: str = "Meduza V"
     log_level: str = "INFO"
     log_format: Literal["json", "console"] = "json"
 
@@ -44,7 +44,7 @@ class Settings(BaseSettings):
 
     # ---- Database ---------------------------------------------------------
     # postgresql+asyncpg://user:pass@host:5432/dbname
-    database_url: str = "postgresql+asyncpg://shopbot:shopbot@localhost:5432/shopbot"
+    database_url: str = "postgresql+asyncpg://meduza:meduza@localhost:5432/meduza"
     db_pool_size: int = 5
     db_max_overflow: int = 5
     db_echo: bool = False

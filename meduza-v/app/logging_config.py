@@ -98,7 +98,7 @@ def _install_safe_extra_handling() -> None:
     Rather than police every call site, colliding keys are renamed once here
     (``created`` -> ``created_``) so any ``extra`` dictionary is safe to pass.
     """
-    if getattr(logging.Logger, "_shopbot_safe_extra", False):
+    if getattr(logging.Logger, "_meduza_safe_extra", False):
         return
 
     original = logging.Logger.makeRecord
@@ -116,7 +116,7 @@ def _install_safe_extra_handling() -> None:
         )
 
     logging.Logger.makeRecord = make_record
-    logging.Logger._shopbot_safe_extra = True
+    logging.Logger._meduza_safe_extra = True
 
 
 def configure_logging(level: str = "INFO", fmt: str = "json") -> None:

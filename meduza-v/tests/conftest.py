@@ -12,7 +12,7 @@ Two backends are supported:
   database. This is the only way to exercise ``SELECT ... FOR UPDATE`` and
   ``SKIP LOCKED``, so the concurrency tests are skipped without it.
 
-      TEST_DATABASE_URL=postgresql+asyncpg://shopbot:shopbot@127.0.0.1/shopbot_test pytest
+      TEST_DATABASE_URL=postgresql+asyncpg://meduza:meduza@127.0.0.1/meduza_test pytest
 """
 
 from __future__ import annotations

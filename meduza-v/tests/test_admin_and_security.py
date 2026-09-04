@@ -195,9 +195,9 @@ async def test_metrics_expose_order_and_outbox_counts(client, products):
     await client.post("/api/checkout/sessions", json=checkout_payload())
     response = await client.get("/metrics")
     assert response.status_code == 200
-    assert 'shopbot_orders_total{status="pending_payment"} 1' in response.text
-    assert "shopbot_outbox_messages_total" in response.text
-    assert "shopbot_uptime_seconds" in response.text
+    assert 'meduza_orders_total{status="pending_payment"} 1' in response.text
+    assert "meduza_outbox_messages_total" in response.text
+    assert "meduza_uptime_seconds" in response.text
 
 
 async def test_error_responses_do_not_leak_internals(client, products, admin_headers):
