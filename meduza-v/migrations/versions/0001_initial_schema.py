@@ -19,6 +19,10 @@ depends_on = None
 JSONType = sa.JSON().with_variant(postgresql.JSONB(), "postgresql")
 # app.models.UTCDateTime is a TypeDecorator over this; DDL is identical.
 UTCDateTime = sa.DateTime(timezone=True)
+# Server-side "now" must be rendered per dialect: now() on PostgreSQL,
+# CURRENT_TIMESTAMP on SQLite. A hardcoded sa.text("now()") passes SQLite's
+# DDL parser but fails at INSERT with "unknown function: now()", which is why
+# every timestamp column below uses sa.func.now() instead.
 
 
 def upgrade() -> None:
@@ -37,8 +41,8 @@ def upgrade() -> None:
         sa.Column("is_active", sa.Boolean(), nullable=False),
         sa.Column("requires_shipping", sa.Boolean(), nullable=False),
         sa.Column("weight_grams", sa.Integer(), nullable=False),
-        sa.Column("created_at", UTCDateTime, server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", UTCDateTime, server_default=sa.text("now()"), nullable=False),
+        sa.Column("created_at", UTCDateTime, server_default=sa.func.now(), nullable=False),
+        sa.Column("updated_at", UTCDateTime, server_default=sa.func.now(), nullable=False),
         sa.CheckConstraint("unit_price_minor >= 0", name="ck_products_price_non_negative"),
         sa.CheckConstraint("stock_on_hand >= 0", name="ck_products_stock_non_negative"),
         sa.CheckConstraint("stock_reserved >= 0", name="ck_products_reserved_non_negative"),
@@ -74,8 +78,8 @@ def upgrade() -> None:
         sa.Column("reservation_expires_at", UTCDateTime, nullable=True),
         sa.Column("paid_at", UTCDateTime, nullable=True),
         sa.Column("failure_reason", sa.String(length=500), nullable=True),
-        sa.Column("created_at", UTCDateTime, server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", UTCDateTime, server_default=sa.text("now()"), nullable=False),
+        sa.Column("created_at", UTCDateTime, server_default=sa.func.now(), nullable=False),
+        sa.Column("updated_at", UTCDateTime, server_default=sa.func.now(), nullable=False),
         sa.CheckConstraint("total_minor >= 0", name="ck_orders_total_non_negative"),
         sa.CheckConstraint(
             "amount_refunded_minor >= 0 AND amount_refunded_minor <= total_minor",
@@ -103,8 +107,8 @@ def upgrade() -> None:
         sa.Column("unit_price_minor", sa.BigInteger(), nullable=False),
         sa.Column("quantity", sa.Integer(), nullable=False),
         sa.Column("line_total_minor", sa.BigInteger(), nullable=False),
-        sa.Column("created_at", UTCDateTime, server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", UTCDateTime, server_default=sa.text("now()"), nullable=False),
+        sa.Column("created_at", UTCDateTime, server_default=sa.func.now(), nullable=False),
+        sa.Column("updated_at", UTCDateTime, server_default=sa.func.now(), nullable=False),
         sa.CheckConstraint("quantity > 0", name="ck_order_items_quantity_positive"),
         sa.ForeignKeyConstraint(["order_id"], ["orders.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["product_id"], ["products.id"], ondelete="RESTRICT"),
@@ -123,8 +127,8 @@ def upgrade() -> None:
         sa.Column("status", sa.String(length=16), nullable=False),
         sa.Column("requested_by", sa.String(length=120), nullable=True),
         sa.Column("idempotency_key", sa.String(length=255), nullable=True),
-        sa.Column("created_at", UTCDateTime, server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", UTCDateTime, server_default=sa.text("now()"), nullable=False),
+        sa.Column("created_at", UTCDateTime, server_default=sa.func.now(), nullable=False),
+        sa.Column("updated_at", UTCDateTime, server_default=sa.func.now(), nullable=False),
         sa.CheckConstraint("amount_minor > 0", name="ck_refunds_amount_positive"),
         sa.ForeignKeyConstraint(["order_id"], ["orders.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
@@ -145,7 +149,7 @@ def upgrade() -> None:
         sa.Column("attempts", sa.Integer(), nullable=False),
         sa.Column("order_id", sa.String(length=36), nullable=True),
         sa.Column("error", sa.Text(), nullable=True),
-        sa.Column("received_at", UTCDateTime, server_default=sa.text("now()"), nullable=False),
+        sa.Column("received_at", UTCDateTime, server_default=sa.func.now(), nullable=False),
         sa.Column("processed_at", UTCDateTime, nullable=True),
         sa.PrimaryKeyConstraint("id"),
         # This unique constraint is the webhook idempotency primitive.
@@ -175,7 +179,7 @@ def upgrade() -> None:
         sa.Column("last_error", sa.Text(), nullable=True),
         sa.Column("locked_by", sa.String(length=64), nullable=True),
         sa.Column("locked_until", UTCDateTime, nullable=True),
-        sa.Column("created_at", UTCDateTime, server_default=sa.text("now()"), nullable=False),
+        sa.Column("created_at", UTCDateTime, server_default=sa.func.now(), nullable=False),
         sa.Column("sent_at", UTCDateTime, nullable=True),
         sa.ForeignKeyConstraint(["order_id"], ["orders.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
@@ -196,7 +200,7 @@ def upgrade() -> None:
         sa.Column("request_id", sa.String(length=64), nullable=True),
         sa.Column("source_ip", sa.String(length=64), nullable=True),
         sa.Column("detail", JSONType, nullable=True),
-        sa.Column("created_at", UTCDateTime, server_default=sa.text("now()"), nullable=False),
+        sa.Column("created_at", UTCDateTime, server_default=sa.func.now(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index("ix_admin_audit_created", "admin_audit_log", ["created_at"])

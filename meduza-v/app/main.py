@@ -2,13 +2,19 @@
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import logging
+import re
 import uuid
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.openapi.docs import get_swagger_ui_html
+from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from starlette.middleware.cors import CORSMiddleware
 
 from .config import get_settings
@@ -22,6 +28,11 @@ from .routers import admin, catalog, checkout, health, webhooks
 from .security import SECURITY_HEADERS
 
 log = logging.getLogger(__name__)
+
+STATIC_DIR = Path(__file__).resolve().parent / "static"
+
+#: Host serving the Swagger UI bundle that FastAPI links to.
+SWAGGER_CDN = "https://cdn.jsdelivr.net"
 
 
 @asynccontextmanager
@@ -67,7 +78,8 @@ def create_app() -> FastAPI:
         ),
         lifespan=lifespan,
         # No interactive docs in production: they advertise the admin surface.
-        docs_url=None if settings.is_production else "/docs",
+        # /docs is registered by hand below so it can carry its own CSP.
+        docs_url=None,
         redoc_url=None,
         openapi_url=None if settings.is_production else "/openapi.json",
     )
@@ -156,6 +168,69 @@ def create_app() -> FastAPI:
     app.include_router(checkout.router)
     app.include_router(webhooks.router)
     app.include_router(admin.router)
+
+    # The storefront. One page, served on the landing route and on both
+    # return-from-payment routes: the provider redirects back with
+    # ?order=&token= and the page renders that order's status from the API.
+    storefront = STATIC_DIR / "storefront.html"
+    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+    # The API's default CSP is `default-src 'none'`, which is right for JSON but
+    # would block the page itself. The storefront gets its own policy: same-origin
+    # only, no inline scripts (the script is a separate file), and the one font
+    # host it uses. Inline style is allowed; inline script is not.
+    STOREFRONT_CSP = (
+        "default-src 'self'; "
+        "script-src 'self'; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "font-src https://fonts.gstatic.com; "
+        "img-src 'self' data:; "
+        "connect-src 'self'; "
+        "base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+    )
+
+    @app.get("/", response_class=HTMLResponse, include_in_schema=False)
+    @app.get(settings.storefront_success_path, response_class=HTMLResponse, include_in_schema=False)
+    @app.get(settings.storefront_cancel_path, response_class=HTMLResponse, include_in_schema=False)
+    async def serve_storefront() -> HTMLResponse:
+        # Set here so the security middleware's setdefault() leaves it alone.
+        return HTMLResponse(
+            storefront.read_text(encoding="utf-8"),
+            headers={"Content-Security-Policy": STOREFRONT_CSP},
+        )
+
+    # Swagger UI, served by hand. The API-wide `default-src 'none'` blocks its
+    # CDN assets and its inline bootstrap, so FastAPI's built-in /docs renders a
+    # blank page under this app's own security headers. Rather than loosen the
+    # policy globally, this route carries a CSP scoped to itself, and pins the
+    # inline bootstrap by SHA-256 hash instead of allowing 'unsafe-inline'.
+    if not settings.is_production:
+        _docs_html = get_swagger_ui_html(
+            openapi_url="/openapi.json",
+            title="Meduza V — API",
+            swagger_favicon_url="/static/favicon.svg",
+        ).body.decode()
+        _inline = re.findall(r"<script[^>]*>(.*?)</script>", _docs_html, re.S)
+        _hashes = " ".join(
+            "'sha256-" + base64.b64encode(hashlib.sha256(b.encode()).digest()).decode() + "'"
+            for b in _inline
+            if b.strip()
+        )
+        DOCS_CSP = (
+            "default-src 'none'; "
+            f"script-src {SWAGGER_CDN} {_hashes}; "
+            f"style-src {SWAGGER_CDN} 'unsafe-inline'; "
+            "img-src 'self' data:; "
+            "connect-src 'self'; "
+            "base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+        )
+
+        @app.get("/docs", include_in_schema=False)
+        async def swagger_ui() -> HTMLResponse:
+            return HTMLResponse(
+                _docs_html, headers={"Content-Security-Policy": DOCS_CSP}
+            )
+
     return app
 
 

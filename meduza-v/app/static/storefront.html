@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Meduza V</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='26' font-size='26'%3E%F0%9F%AA%BC%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;800&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
+<style>
+  :root{
+    --ground:#F4F2EF; --card:#FFFFFF; --ink:#16221F; --dim:#5C6F6A; --faint:#8FA29D;
+    --line:#DFDAD3; --accent:#12808F; --accent-ink:#0B5E6A; --money:#8A5B18;
+    --ok:#2E7D5B; --danger:#9E3B34;
+    --display:"Golos Text",system-ui,sans-serif; --body:"Source Serif 4",Georgia,serif;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --ground:#0E1614; --card:#16211F; --ink:#E4EDEA; --dim:#9DB3AD; --faint:#6E837D;
+      --line:#25332F; --accent:#4FC4D2; --accent-ink:#7BD6E1; --money:#E0A64A;
+      --ok:#5FBF92; --danger:#E88A80;
+    }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.6}
+  header{position:sticky;top:0;z-index:10;background:var(--card);border-bottom:1px solid var(--line)}
+  .bar{max-width:1080px;margin:0 auto;padding:.85rem 1.25rem;display:flex;align-items:center;gap:1rem}
+  .logo{font-family:var(--display);font-weight:800;font-size:1.15rem;letter-spacing:-.01em;cursor:pointer}
+  .logo span{color:var(--accent)}
+  .grow{flex:1}
+  button{font-family:var(--display);font-size:.9rem;cursor:pointer;border-radius:8px;border:1px solid transparent;padding:.5rem .9rem}
+  .btn{background:var(--accent);color:#fff;font-weight:600}
+  .btn:hover{background:var(--accent-ink)}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .ghost{background:transparent;border-color:var(--line);color:var(--ink)}
+  .ghost:hover{border-color:var(--accent)}
+  .cartbtn{position:relative}
+  .pill{position:absolute;top:-6px;right:-6px;background:var(--money);color:#fff;font-family:var(--display);
+    font-size:.68rem;font-weight:700;min-width:19px;height:19px;border-radius:10px;display:grid;place-items:center;padding:0 5px}
+  main{max-width:1080px;margin:0 auto;padding:1.75rem 1.25rem 4rem}
+  h1{font-family:var(--display);font-weight:800;font-size:1.9rem;letter-spacing:-.02em;margin:0 0 .35rem}
+  .lede{color:var(--dim);margin:0 0 1.75rem;max-width:34rem}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(238px,1fr));gap:1rem}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:1.1rem;display:flex;flex-direction:column;gap:.5rem}
+  .card h3{font-family:var(--display);font-weight:600;font-size:1rem;margin:0}
+  .card p{margin:0;font-size:.9rem;color:var(--dim);flex:1}
+  .sku{font-family:var(--display);font-size:.68rem;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
+  .price{font-family:var(--display);font-weight:800;font-size:1.2rem;color:var(--money)}
+  .row{display:flex;align-items:center;gap:.6rem}
+  .stock{font-size:.78rem;color:var(--dim)}
+  .stock.low{color:var(--danger)}
+  .qty{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .qty button{border:0;background:var(--card);padding:.35rem .6rem;color:var(--ink)}
+  .qty span{min-width:2rem;display:grid;place-items:center;font-family:var(--display);font-size:.9rem}
+  table{width:100%;border-collapse:collapse}
+  td,th{padding:.7rem .5rem;border-bottom:1px solid var(--line);text-align:left;font-size:.94rem}
+  th{font-family:var(--display);font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--dim)}
+  .num{text-align:right;font-variant-numeric:tabular-nums}
+  .total td{font-family:var(--display);font-weight:800;font-size:1.05rem;border-bottom:0}
+  h2{font-family:var(--display);font-size:1.05rem;margin:1.6rem 0 .5rem}
+  form{display:grid;gap:.85rem;max-width:32rem}
+  label{display:grid;gap:.3rem;font-family:var(--display);font-size:.82rem;color:var(--dim)}
+  input{font-family:var(--body);font-size:.95rem;padding:.6rem .75rem;border:1px solid var(--line);
+    border-radius:8px;background:var(--card);color:var(--ink)}
+  input:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:transparent}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:.85rem}
+  .note{background:var(--card);border:1px solid var(--line);border-left:3px solid var(--accent);
+    border-radius:0 8px 8px 0;padding:.85rem 1rem;font-size:.88rem;color:var(--dim)}
+  .badge{display:inline-block;font-family:var(--display);font-size:.7rem;font-weight:700;letter-spacing:.06em;
+    text-transform:uppercase;padding:.25rem .55rem;border-radius:5px}
+  .badge{background:rgba(0,0,0,.05);color:var(--dim);margin-right:.4rem}
+  .badge.paid{background:rgba(46,125,91,.14);color:var(--ok)}
+  .badge.pending{background:rgba(138,91,24,.14);color:var(--money)}
+  .err{color:var(--danger);font-size:.88rem}
+  .empty{color:var(--faint);text-align:center;padding:3rem 1rem}
+  footer{border-top:1px solid var(--line);margin-top:2rem;padding:1.25rem;text-align:center;color:var(--faint);font-size:.8rem}
+</style>
+</head>
+<body>
+<header><div class="bar">
+  <div class="logo" data-act="go" data-view="catalog">Meduza<span> V</span></div>
+  <div class="grow"></div>
+  <button class="ghost cartbtn" data-act="go" data-view="cart">Корзина<span class="pill" id="pill" hidden>0</span></button>
+</div></header>
+<main id="view"><div class="empty">Загрузка каталога…</div></main>
+<footer>Оплата проходит на стороне платёжного провайдера. Данные карты не попадают в этот магазин и нигде не хранятся.</footer>
+
+<script src="/static/storefront.js" defer></script>
+</body>
+</html>
