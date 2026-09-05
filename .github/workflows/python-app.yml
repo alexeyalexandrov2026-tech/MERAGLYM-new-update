@@ -26,7 +26,10 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install flake8 pytest
+        # pytest-asyncio is declared in MERAGLYM-main/python/pyproject.toml; without it
+        # every @pytest.mark.asyncio test errors with "async def functions are not
+        # natively supported".
+        pip install flake8 pytest pytest-asyncio
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
     - name: Lint with flake8
       run: |
@@ -36,4 +39,8 @@ jobs:
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
     - name: Test with pytest
       run: |
-        pytest
+        # Scope to the actual suite. The loose MERAGLYM-main/python/test_*.py files are
+        # ad-hoc scripts, not pytest tests, and one of them defines a helper named
+        # test_single_adapter(identifier, adapter_class, payload) that pytest collects
+        # and then errors on for missing fixtures. They contribute no tests of their own.
+        pytest MERAGLYM-main/python/tests
