@@ -1,0 +1,8 @@
+# Line endings matter for the installers, in both directions.
+#
+# Windows batch files need CRLF: cmd.exe mis-parses a multi-line `if (...)`
+# block in an LF-only .bat. Shell scripts need LF: bash fails with
+# "\r: command not found" if a Windows checkout gives them CRLF.
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+*.sh  text eol=lf

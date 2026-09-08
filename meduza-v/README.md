@@ -39,7 +39,55 @@ provider's prohibited-business list and your own counsel first.
 
 ---
 
-## Install on your own PC (one command)
+## Install on your own PC
+
+There are two installers. Pick by what you are doing.
+
+| | **Demo / one machine** | **Real shop** |
+|---|---|---|
+| Command | `installer\install-local.bat` (Windows)<br>`./installer/install-local.sh` (Linux/macOS) | `installer\install.bat` (Windows)<br>`./installer/install.sh` (Linux/macOS) |
+| Needs Docker | no | yes |
+| Database | SQLite file | PostgreSQL |
+| Payments | simulated | Stripe |
+| Safe to take money | **no** | yes |
+
+Both open the shop at `http://127.0.0.1:8000` and print the generated admin key.
+
+### Demo install — no Docker
+
+One command, one Python virtualenv, one SQLite file. Nothing else is installed
+on the machine, and nothing leaves it.
+
+```powershell
+.\installer\install-local.ps1          # Windows (or double-click install-local.bat)
+```
+
+```bash
+./installer/install-local.sh           # Linux / macOS
+```
+
+The only prerequisite is **Python 3.11 or newer**
+(<https://www.python.org/downloads/> — on Windows tick *Add python.exe to PATH*).
+The installer creates `.venv`, installs dependencies, generates `.env` with a
+random admin key, applies migrations, loads a sample catalog, starts the web
+service and the background worker, and waits until the shop answers its own
+health check. Re-running it is safe: an existing `.env` is never overwritten.
+
+Options: `-Port 8100` / `--port 8100`, `-NoStart` / `--no-start`,
+`-NoSeed` / `--no-seed`. Restart later with `.\start-local.ps1` or
+`./start-local.sh`.
+
+**This is not the production path**, for two reasons worth stating plainly:
+
+* SQLite has no row locking, so the protection against two customers buying the
+  last unit at the same moment is weaker than on PostgreSQL.
+* Real Stripe payments cannot work on `127.0.0.1` at all: Stripe delivers the
+  payment confirmation by calling *your* server from the internet, and it
+  cannot reach an address that exists only inside your machine. You need a
+  public HTTPS address — a host, or a tunnel such as `stripe listen` for
+  testing. The configuration refuses to start in production without one.
+
+### Production install — Docker
 
 The installer sets everything up for you: it checks Docker, generates fresh
 secrets, starts the database, cache, web service and worker, applies the
@@ -82,7 +130,12 @@ and configuration as well.
 | `-NoSeed` / `--no-seed` | skip the sample catalog |
 | `-NoBrowser` | do not open the browser (Windows only) |
 
-## Quick start for developers (no Docker)
+### Seeing it work
+
+`docs/PRESENTATION.md` walks through the demo screen by screen, with
+screenshots taken from a real run of `install-local.sh`.
+
+## Quick start for developers
 
 ```bash
 cp .env.example .env          # then edit; the fake provider needs no keys
