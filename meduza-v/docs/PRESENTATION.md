@@ -9,9 +9,17 @@
 
 ## 1. Демо за пять минут
 
+**Linux / macOS:**
+
 ```bash
 git clone <репозиторий> && cd meduza-v
 ./installer/install-local.sh
+```
+
+**Windows** — двойной клик по `installer\install-local.bat`, либо:
+
+```powershell
+.\installer\install-local.ps1
 ```
 
 Скрипт сам: проверит Python 3.11+, создаст `.venv`, поставит зависимости,
