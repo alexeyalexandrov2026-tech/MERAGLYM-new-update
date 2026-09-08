@@ -148,9 +148,25 @@ async def test_rate_limiter_fails_open_when_the_backend_breaks():
     assert allowed, "a limiter outage must not take checkout down"
 
 
-async def test_checkout_is_rate_limited(app, client, products):
+async def test_checkout_is_rate_limited(app, client, products, monkeypatch):
+    """The third request in one window is refused.
+
+    The clock is pinned because the limiter uses a fixed window keyed on
+    ``int(time.time() // 60)``. Four unpinned requests that happen to straddle
+    a minute boundary land in two buckets, neither of which reaches the limit,
+    and every one of them returns 201 — which is correct behaviour for a
+    fixed-window limiter and a false failure for this test. It cost a red CI
+    run before it was pinned.
+    """
     app.state.limiter = RateLimiter(MemoryBackend(), enabled=True)
     app.state.settings.rate_limit_checkout_per_minute = 2
+
+    class _PinnedClock:
+        @staticmethod
+        def time() -> float:
+            return 1_000_000.0  # mid-window: 1_000_000 % 60 == 40
+
+    monkeypatch.setattr("app.ratelimit.time", _PinnedClock)
 
     statuses = []
     for i in range(4):
@@ -160,9 +176,7 @@ async def test_checkout_is_rate_limited(app, client, products):
             headers={"Idempotency-Key": f"key-{i}"},
         )
         statuses.append(response.status_code)
-    assert 429 in statuses
-    blocked = next(s for s in statuses if s == 429)
-    assert blocked == 429
+    assert statuses == [201, 201, 429, 429], statuses
 
 
 async def test_forwarded_for_is_not_trusted_by_default(client, products):
