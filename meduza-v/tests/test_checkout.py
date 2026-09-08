@@ -111,3 +111,100 @@ async def test_no_card_data_is_ever_persisted(client, products, engine):
     }
     forbidden = ("card_number", "pan", "cvc", "cvv", "expiry", "card_last4")
     assert not [c for c in columns if any(f in c for f in forbidden)]
+
+
+# --- replay must not be an access-control hole ---------------------------------
+# The idempotency key is not a secret: the client picks the supplied one, and the
+# fallback is a digest of an email address and a basket. Returning an order on a
+# key match alone handed a stranger somebody else's order together with its
+# access_token — the credential for reading that order's name and shipping
+# address. These tests pin the two halves of the fix.
+
+
+async def test_replay_does_not_leak_a_stranger_order(client, products):
+    """A guessed email and basket must not reach another buyer's order."""
+    victim = await client.post(
+        "/api/checkout/sessions",
+        json=checkout_payload(
+            email="victim@example.com",
+            customer_name="Victim Person",
+            items=[{"sku": "COF-ETH-250", "quantity": 1}],
+            shipping_address={
+                "line1": "9 Secret Lane",
+                "city": "Privatetown",
+                "postal_code": "99999",
+                "country": "GB",
+            },
+        ),
+    )
+    assert victim.status_code == 201
+
+    # Same email and basket — everything an attacker can guess — but their own
+    # name and address, which they cannot.
+    attacker = await client.post(
+        "/api/checkout/sessions",
+        json=checkout_payload(
+            email="victim@example.com",
+            customer_name="Attacker",
+            items=[{"sku": "COF-ETH-250", "quantity": 1}],
+            shipping_address={
+                "line1": "1 Attacker Road",
+                "city": "Elsewhere",
+                "postal_code": "11111",
+                "country": "US",
+            },
+        ),
+    )
+    assert attacker.status_code == 201
+    assert attacker.json()["order_id"] != victim.json()["order_id"]
+    assert attacker.json()["order_status_url"] != victim.json()["order_status_url"]
+
+    # And the token the attacker did get must not open the victim's order.
+    victim_id = victim.json()["order_id"]
+    attacker_token = attacker.json()["order_status_url"].split("token=")[1]
+    probe = await client.get(f"/api/orders/{victim_id}?token={attacker_token}")
+    assert probe.status_code in (403, 404)
+
+
+async def test_a_colliding_client_key_is_refused_not_replayed(client, products):
+    """Reusing a key for a different request is an error, never a hand-over."""
+    headers = {"Idempotency-Key": "collision"}
+    first = await client.post(
+        "/api/checkout/sessions",
+        json=checkout_payload(email="one@example.com"),
+        headers=headers,
+    )
+    second = await client.post(
+        "/api/checkout/sessions",
+        json=checkout_payload(email="two@example.com"),
+        headers=headers,
+    )
+    assert first.status_code == 201
+    # 409, the same answer Stripe gives: the key is taken by another request.
+    # What matters is that it is not 201 carrying the first caller's order.
+    assert second.status_code == 409, second.text
+    assert "Idempotency-Key" in second.json()["error"]["message"]
+    assert first.json()["order_id"] not in second.text
+
+
+async def test_replay_still_works_for_the_identical_request(client, products):
+    """The double-click protection the key exists for must survive the fix."""
+    payload = checkout_payload()
+    first = await client.post("/api/checkout/sessions", json=payload)
+    second = await client.post("/api/checkout/sessions", json=payload)
+    assert first.json()["order_id"] == second.json()["order_id"]
+
+    async with session_scope() as db:
+        product = await db.scalar(select(Product).where(Product.sku == "COF-ETH-250"))
+        assert product.stock_reserved == 2  # reserved once, not twice
+
+
+def test_storefront_sends_an_unguessable_idempotency_key() -> None:
+    """The page must not fall back to the guessable server-derived key."""
+    from pathlib import Path
+
+    js = (Path(__file__).resolve().parents[1] / "app" / "static" / "storefront.js").read_text(
+        encoding="utf-8"
+    )
+    assert '"Idempotency-Key"' in js, "checkout does not send an Idempotency-Key"
+    assert "randomUUID" in js, "the key is not generated from a random source"

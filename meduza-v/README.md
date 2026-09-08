@@ -462,12 +462,31 @@ Before taking real money:
   FX conversion.
 - **The webhook payload** is retained; see *Data retention* above.
 
+## Idempotency and who may replay a checkout
+
+`POST /api/checkout/sessions` accepts an `Idempotency-Key` header, and derives
+one from the request when the client sends none. Either way **the key alone
+never authorises anything**: a client picks its own key, and a derived key is a
+digest of data a stranger can guess.
+
+A replay is honoured only when the incoming request is identical to the one
+that created the order — same email, name, basket and shipping address. A
+caller who satisfies that already knows everything the order can disclose.
+Anything else is refused: reusing a key for a different request returns **409**,
+it never returns the first caller's order.
+
+This matters because the response carries `order_status_url`, whose token is
+the credential for reading that order's name and shipping address. Clients
+should send a random per-checkout key (the storefront uses
+`crypto.randomUUID()`); the derived fallback exists only so a double-clicked
+buy button does not create two orders.
+
 ## Verification status
 
 Verified by execution against real services:
 
-- Full suite on **SQLite** (158 passed, 7 skipped — the skips need a specific
-  backend) and on **PostgreSQL 16 + Redis 7** (165 passed, 0 skipped),
+- Full suite on **SQLite** (162 passed, 7 skipped — the skips need a specific
+  backend) and on **PostgreSQL 16 + Redis 7** (169 passed, 0 skipped),
   repeated runs, no flakes. `ruff` clean.
 - `alembic upgrade head`, `downgrade base`, `upgrade head` applied to a live
   PostgreSQL database; `compare_metadata` reports zero drift against the ORM.

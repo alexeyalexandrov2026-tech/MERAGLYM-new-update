@@ -16,6 +16,9 @@ from __future__ import annotations
 import datetime as dt
 import hashlib
 import logging
+import secrets
+from collections.abc import Iterable, Mapping
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -42,20 +45,75 @@ def derive_idempotency_key(request: CheckoutRequest, supplied: str | None) -> st
 
     The digest fallback stops a double-clicked buy button from creating two
     orders and two stock reservations for the same basket.
+
+    Neither form of key is a secret: the client picks the supplied one, and the
+    fallback is derived from data a stranger can guess. Replay is therefore
+    authorised by `fingerprint`, never by the key alone — see
+    `find_replayed_order`.
     """
     if supplied:
         return supplied[:255]
-    canonical = "|".join(
-        [
-            request.email.lower(),
-            *(f"{i.sku}x{i.quantity}" for i in sorted(request.items, key=lambda i: i.sku)),
-        ]
+    return "auto-" + fingerprint(request)
+
+
+def _fingerprint(
+    email: str,
+    customer_name: str | None,
+    lines: Iterable[tuple[str, int]],
+    address: Mapping[str, Any] | None,
+) -> str:
+    parts = [
+        email.lower().strip(),
+        (customer_name or "").strip(),
+        *(f"{sku}x{quantity}" for sku, quantity in sorted(lines)),
+    ]
+    if address is None:
+        parts.append("-")
+    else:
+        parts.extend(
+            str(address.get(field) or "").strip()
+            for field in ("line1", "line2", "city", "postal_code", "state", "country")
+        )
+    return hashlib.sha256("|".join(parts).encode()).hexdigest()
+
+
+def fingerprint(request: CheckoutRequest) -> str:
+    """Digest of everything this caller supplied about the order."""
+    return _fingerprint(
+        request.email,
+        request.customer_name,
+        ((i.sku, i.quantity) for i in request.items),
+        request.shipping_address.model_dump() if request.shipping_address else None,
     )
-    return "auto-" + hashlib.sha256(canonical.encode()).hexdigest()
 
 
-async def find_replayed_order(session: AsyncSession, key: str) -> Order | None:
-    """Return a still-payable order previously created with this key."""
+def order_fingerprint(order: Order) -> str:
+    """The same digest, recomputed from an order already in the database."""
+    return _fingerprint(
+        order.customer_email,
+        order.customer_name,
+        ((i.sku, i.quantity) for i in order.items),
+        order.shipping_address,
+    )
+
+
+async def find_replayed_order(
+    session: AsyncSession, key: str, request: CheckoutRequest
+) -> Order | None:
+    """Return a still-payable order previously created by *this same request*.
+
+    The key alone must never be enough. A client picks its own
+    `Idempotency-Key`, and the fallback key is a digest of an email address and
+    a basket — both guessable. Returning an order on a key match alone handed
+    any caller who guessed them somebody else's order together with its
+    `access_token`, which is the credential for reading that order's name and
+    shipping address; registering the key first also let an attacker redirect a
+    stranger's checkout to their own address.
+
+    So a replay is only honoured when the incoming request is byte-for-byte the
+    request that created the order. A caller who satisfies that already knows
+    everything the order can disclose.
+    """
     order = await session.scalar(select(Order).where(Order.idempotency_key == key))
     if order is None:
         return None
@@ -63,6 +121,13 @@ async def find_replayed_order(session: AsyncSession, key: str) -> Order | None:
         return None
     if order.reservation_expires_at and order.reservation_expires_at <= utcnow():
         return None
+    if not secrets.compare_digest(order_fingerprint(order), fingerprint(request)):
+        # Only a client-supplied key can land here: the fallback key *is* the
+        # fingerprint, so two different requests never derive the same one.
+        log.warning("checkout_idempotency_key_collision", extra={"order_id": order.id})
+        raise ConflictError(
+            "This Idempotency-Key is already in use for a different checkout."
+        )
     return order
 
 
@@ -238,7 +303,7 @@ async def create_checkout(
 
     # 1. Reserve stock and persist the pending order.
     async with session_scope() as db:
-        replay = await find_replayed_order(db, idempotency_key)
+        replay = await find_replayed_order(db, idempotency_key, request)
         if replay is not None:
             log.info("checkout_idempotent_replay", extra={"order_id": replay.id})
             return replay

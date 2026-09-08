@@ -84,12 +84,25 @@ const submitOrder = async (ev) => {
       postal_code: f.get("postal_code"), country: String(f.get("country")).toUpperCase() }
   };
   try{
+    // A random per-attempt key, kept until the order is created so a
+    // double-click or a refresh reuses it instead of making a second order.
+    // It must not be derived from the basket: the server treats a key as
+    // guessable and re-checks the whole request before honouring a replay,
+    // but an unguessable key keeps strangers out of that path entirely.
+    let key = sessionStorage.getItem("checkoutKey");
+    if(!key){
+      key = (crypto.randomUUID ? crypto.randomUUID()
+             : String(Date.now()) + Math.random().toString(36).slice(2));
+      try{ sessionStorage.setItem("checkoutKey", key); }catch{}
+    }
     const r = await fetch("/api/checkout/sessions", { method:"POST",
-      headers:{"Content-Type":"application/json"}, body: JSON.stringify(body) });
+      headers:{"Content-Type":"application/json", "Idempotency-Key": key},
+      body: JSON.stringify(body) });
     const data = await r.json();
     if(!r.ok) throw new Error(data?.error?.message || "Не удалось создать заказ");
     localStorage.setItem("lastOrder", JSON.stringify({ id:data.order_id, url:data.order_status_url, ref:data.reference }));
     state.cart = {}; saveCart();
+    try{ sessionStorage.removeItem("checkoutKey"); }catch{}
     window.location.href = data.checkout_url;      // provider-hosted payment page
   }catch(e){
     state.error = e.message; btn.disabled = false; render();
