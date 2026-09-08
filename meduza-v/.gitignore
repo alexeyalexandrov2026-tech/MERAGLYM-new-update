@@ -16,4 +16,6 @@ htmlcov/
 *.db-wal
 *.db-shm
 start-local.sh
+start-local.ps1
+.meduza-local.pid
 *.log

@@ -77,6 +77,11 @@ Options: `-Port 8100` / `--port 8100`, `-NoStart` / `--no-start`,
 `-NoSeed` / `--no-seed`. Restart later with `.\start-local.ps1` or
 `./start-local.sh`.
 
+To remove it: `installer\uninstall-local.ps1` or
+`./installer/uninstall-local.sh`. Both stop the shop and delete the
+virtualenv but keep your orders and `.env`; add `-Purge` / `--purge` to
+delete those as well.
+
 **This is not the production path**, for two reasons worth stating plainly:
 
 * SQLite has no row locking, so the protection against two customers buying the

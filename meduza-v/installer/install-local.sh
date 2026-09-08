@@ -114,7 +114,9 @@ if curl -fsS "http://127.0.0.1:$PORT/healthz" >/dev/null 2>&1; then
   warn "something is already serving on port $PORT"
 else
   nohup "$VENV/bin/uvicorn" app.main:app --host 127.0.0.1 --port "$PORT" --log-level warning > server.log 2>&1 &
+  echo $! > .meduza-local.pid
   nohup "$VPY" -m app.worker > worker.log 2>&1 &
+  echo $! >> .meduza-local.pid
   for _ in $(seq 1 60); do curl -fsS "http://127.0.0.1:$PORT/healthz" >/dev/null 2>&1 && break; sleep 0.25; done
 fi
 curl -fsS "http://127.0.0.1:$PORT/healthz" >/dev/null 2>&1 || die "the shop did not start; see server.log"
@@ -127,7 +129,7 @@ cat <<EOF
 ${GREEN}${BOLD}Meduza V is running.${OFF}
 
   Storefront   ${URL}
-  API docs     ${URL}/docs  ${DIM}(Swagger UI loads from a CDN — needs internet)${OFF}
+  API docs     ${URL}/docs
   Admin key    $(grep '^ADMIN_API_KEY=' .env | cut -d= -f2- | tr -d '"')
 
   Restart later:  ./start-local.sh

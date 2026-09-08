@@ -169,7 +169,10 @@ if (Probe '/healthz') {
     $flag = if ($OnWindows) { '/c' } else { '-c' }
     $serve = "`"$VPy`" -m uvicorn app.main:app --host 127.0.0.1 --port $Port --log-level warning > server.log 2>&1"
     $work = "`"$VPy`" -m app.worker > worker.log 2>&1"
-    foreach ($command in @($serve, $work)) {
+    # Record what we started. The uninstaller cannot reliably find these by
+    # process path: on Linux and macOS .venv/bin/python is a symlink, so the
+    # reported path is the system interpreter, outside the project entirely.
+    $pids = foreach ($command in @($serve, $work)) {
         $psi = New-Object System.Diagnostics.ProcessStartInfo
         $psi.FileName = $shell
         $psi.ArgumentList.Add($flag)
@@ -177,8 +180,9 @@ if (Probe '/healthz') {
         $psi.WorkingDirectory = $ProjectRoot
         $psi.UseShellExecute = $false
         $psi.CreateNoWindow = $true
-        [System.Diagnostics.Process]::Start($psi) | Out-Null
+        ([System.Diagnostics.Process]::Start($psi)).Id
     }
+    Set-Content -Path (Join-Path $ProjectRoot '.meduza-local.pid') -Value $pids
     foreach ($i in 1..60) { if (Probe '/healthz') { break }; Start-Sleep -Milliseconds 250 }
 }
 if (-not (Probe '/healthz')) { Die 'the shop did not start; see server.log' }
@@ -191,7 +195,7 @@ Write-Host ""
 Write-Host "Meduza V is running." -ForegroundColor Green
 Write-Host ""
 Write-Host "  Storefront   $Url"
-Write-Host "  API docs     $Url/docs  (Swagger UI loads from a CDN - needs internet)"
+Write-Host "  API docs     $Url/docs"
 Write-Host "  Admin key    $adminKey"
 Write-Host ""
 Write-Host "  Restart later:  .\start-local.ps1"

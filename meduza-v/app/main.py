@@ -31,8 +31,8 @@ log = logging.getLogger(__name__)
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
-#: Host serving the Swagger UI bundle that FastAPI links to.
-SWAGGER_CDN = "https://cdn.jsdelivr.net"
+#: Vendored Swagger UI, served from our own /static so /docs works offline.
+SWAGGER_UI_DIR = "/static/vendor/swagger-ui"
 
 
 @asynccontextmanager
@@ -199,15 +199,20 @@ def create_app() -> FastAPI:
             headers={"Content-Security-Policy": STOREFRONT_CSP},
         )
 
-    # Swagger UI, served by hand. The API-wide `default-src 'none'` blocks its
-    # CDN assets and its inline bootstrap, so FastAPI's built-in /docs renders a
-    # blank page under this app's own security headers. Rather than loosen the
-    # policy globally, this route carries a CSP scoped to itself, and pins the
-    # inline bootstrap by SHA-256 hash instead of allowing 'unsafe-inline'.
+    # Swagger UI, served by hand for two reasons. The API-wide
+    # `default-src 'none'` blocks its assets and its inline bootstrap, so
+    # FastAPI's built-in /docs renders a blank page under this app's own
+    # security headers; and its default asset URLs point at a CDN, which the
+    # offline demo installer cannot reach. So the assets are vendored under
+    # /static, the route carries a CSP scoped to itself, and the inline
+    # bootstrap is pinned by SHA-256 hash rather than allowing 'unsafe-inline'.
+    # The result loads nothing from outside this process.
     if not settings.is_production:
         _docs_html = get_swagger_ui_html(
             openapi_url="/openapi.json",
             title="Meduza V — API",
+            swagger_js_url=f"{SWAGGER_UI_DIR}/swagger-ui-bundle.js",
+            swagger_css_url=f"{SWAGGER_UI_DIR}/swagger-ui.css",
             swagger_favicon_url="/static/favicon.svg",
         ).body.decode()
         _inline = re.findall(r"<script[^>]*>(.*?)</script>", _docs_html, re.S)
@@ -218,8 +223,8 @@ def create_app() -> FastAPI:
         )
         DOCS_CSP = (
             "default-src 'none'; "
-            f"script-src {SWAGGER_CDN} {_hashes}; "
-            f"style-src {SWAGGER_CDN} 'unsafe-inline'; "
+            f"script-src 'self' {_hashes}; "
+            "style-src 'self' 'unsafe-inline'; "
             "img-src 'self' data:; "
             "connect-src 'self'; "
             "base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
