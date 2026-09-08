@@ -466,8 +466,9 @@ Before taking real money:
 
 Verified by execution against real services:
 
-- Full suite on **SQLite** (149 passed, 7 skipped) and on **PostgreSQL 16 +
-  Redis 7** (156 passed, 0 skipped), repeated runs, no flakes.
+- Full suite on **SQLite** (158 passed, 7 skipped — the skips need a specific
+  backend) and on **PostgreSQL 16 + Redis 7** (165 passed, 0 skipped),
+  repeated runs, no flakes. `ruff` clean.
 - `alembic upgrade head`, `downgrade base`, `upgrade head` applied to a live
   PostgreSQL database; `compare_metadata` reports zero drift against the ORM.
   The parity tests were confirmed to *fail* on a deliberately introduced
@@ -478,6 +479,19 @@ Verified by execution against real services:
   `Set-EnvValue` and `Write-EnvFile` functions, plus a full stubbed run), with
   its generated `.env` confirmed BOM-free and LF-terminated and accepted by
   both `docker compose config` and the app's own settings validation.
+- **The demo (no-Docker) installers, both of them, end to end**, from a fresh
+  `git clone` of this branch: `install-local.sh` under bash and
+  `install-local.ps1` under PowerShell 7.4.6, each followed by a purchase
+  through the shop it started — server-computed total, signed webhook
+  processed, replay deduplicated, tampered body rejected, stock decremented,
+  receipt delivered by the worker *after* the installer had exited,
+  fulfilment, partial refund, over-refund rejected, admin unauthenticated
+  rejected — and then `uninstall-local.*`, confirming the port stops
+  answering, no process is left behind, and `git status` is clean.
+- **The storefront in a real browser** (Chromium via Playwright): catalog,
+  cart, checkout form and order status, plus `/docs` rendering all 19
+  operations with zero console errors and zero requests leaving the process.
+  `docs/screenshots/` is that run.
 - A real `uvicorn` server plus the worker, end to end: catalog, checkout,
   idempotent replay, stock reservation, signed webhook (one processed and two
   duplicates), forged signature rejected, stock committed, receipt rendered and
@@ -488,13 +502,19 @@ Verified by execution against real services:
 
 Verified structurally only (no daemon available in the build environment):
 
-- **Docker image build** — the Dockerfile is not built here; `docker compose
-  config` validates. CI builds the image on every push.
+- **Docker image build** — `docker compose config` validates, but the image is
+  not built here: this environment's egress policy blocks Docker Hub blob
+  downloads, so even the base image cannot be pulled. CI builds it on every
+  push.
 - **The installers against real Docker** — both were driven with a stubbed
   `docker` command, so every step *except* the actual container start, health
-  poll and seed is exercised. `install.ps1` was run on Linux PowerShell, not on
-  Windows: the logic is verified, the Windows-specific environment (Docker
-  Desktop, execution policy, `Start-Process`) is not.
+  poll and seed is exercised. Both PowerShell installers were run on **Linux**
+  PowerShell 7.4.6, not on Windows. Every branch that is not
+  platform-specific is therefore executed; what remains unverified is the
+  Windows side of the two places where the scripts deliberately differ —
+  `Scripts\` versus `bin/` for the virtualenv, and `cmd.exe` versus `/bin/sh`
+  for launching the shop — along with Docker Desktop and the execution
+  policy.
 - **Compose stack runtime** — service wiring, health checks and restart
   policies are validated as configuration, not started.
 
