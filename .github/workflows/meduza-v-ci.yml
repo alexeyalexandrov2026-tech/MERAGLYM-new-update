@@ -29,9 +29,12 @@ jobs:
         run: |
           bash -n installer/install.sh
           bash -n installer/uninstall.sh
+          bash -n installer/install-local.sh
+          bash -n installer/uninstall-local.sh
           pwsh -NoProfile -Command '
             $bad = $false
-            foreach ($f in @("installer/install.ps1","installer/uninstall.ps1")) {
+            foreach ($f in @("installer/install.ps1","installer/uninstall.ps1",
+                             "installer/install-local.ps1","installer/uninstall-local.ps1")) {
               $errors = $null
               $null = [System.Management.Automation.Language.Parser]::ParseFile(
                 (Resolve-Path $f), [ref]$null, [ref]$errors)
