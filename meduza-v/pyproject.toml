@@ -1,0 +1,27 @@
+[project]
+name = "meduza-v"
+version = "1.0.0"
+description = "Continuously running e-commerce bot for lawful general merchandise."
+requires-python = ">=3.11"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "S", "C4", "SIM", "RUF"]
+ignore = [
+    "S101",  # asserts are the point in tests
+    "B008",  # FastAPI's Depends() in defaults is the documented idiom
+    "E501",  # long lines are caught by the formatter
+    "UP042", # `str, Enum` is deliberate: SQLAlchemy Enum(native_enum=False)
+             # and Pydantic both round-trip these by value.
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S105", "S106", "S311", "RUF012"]
+# The literals flagged here are a test-fixture default and a status label,
+# not credentials; real secrets come only from the environment.
+"app/payments/fake.py" = ["S105", "S107"]
+"app/routers/health.py" = ["S105"]
+"app/services/outbox.py" = ["S311"]  # jitter, not cryptography
